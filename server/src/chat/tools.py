@@ -1,4 +1,4 @@
-﻿"""工具定义与执行 — 对应 qq-agent 的 llm/tools.py
+"""工具定义与执行 — 对应 qq-agent 的 llm/tools.py
 
 10 个工具，按 OpenAI function calling 格式定义。
 扩展新工具只需三步：
@@ -455,12 +455,23 @@ async def execute_tool(
                 f"约 {cal:.0f} kcal｜数据库ID: {record.id}"
             )
 
-        # ---- 工具 9：分析食物图片（占位） ----
+        # ---- 工具 9：分析食物图片 ----
         elif tool_name == "analyze_food_image":
-            return (
-                "[占位] 食物图片分析功能将在接入 Qwen VL 后可用。\n"
-                "当前请用户以文字描述食物内容，你可通过 search_foods 查找营养数据。"
-            )
+            image_url = arguments.get("image_url", "")
+            if not image_url:
+                return "[错误] 请提供图片URL或base64数据"
+
+            from src.services.qwen import qwen_vl
+            if not qwen_vl.is_configured:
+                return (
+                    "Qwen VL 视觉模型未配置（请在 .env 中填写 QWEN_API_KEY）。\n"
+                    "建议：请用户以文字描述食物内容，你可通过 search_foods 查找营养数据。"
+                )
+
+            result = await qwen_vl.analyze_food(image_url)
+            if result:
+                return f"【图片分析结果】\n{result}\n\n接下来你可以用 search_foods 核对营养数据。"
+            return "图片分析失败，请尝试用文字描述食物内容。"
 
         # ---- 工具 10：附近推荐（占位） ----
         elif tool_name == "get_nearby_food":
