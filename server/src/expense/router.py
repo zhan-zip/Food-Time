@@ -230,7 +230,8 @@ async def expense_stats(
 # ==================== OCR 识图记账 ====================
 
 class OcrUpload(BaseModel):
-    image_base64: str = Field(..., description="图片 base64 编码（不含 data:image 前缀）")
+    image_base64: str = Field(..., description="图片 base64 编码（可含 data:image 前缀）")
+    save: bool = Field(default=False, description="是否直接保存记录（false=仅返回识别结果，供用户核对后手动保存）")
 
 @router.post("/ocr")
 async def ocr_expense(
@@ -238,14 +239,14 @@ async def ocr_expense(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """拍照识别账单（Qwen VL），自动提取金额和分类"""
+    """拍照识别账单（Qwen VL），可选是否自动保存"""
     if not qwen_vl.is_configured:
         return {
             "success": False,
             "message": "Qwen VL 未配置（请在 .env 中填写 QWEN_API_KEY），请手动录入",
         }
 
-    # 构建 data URL（image_base64 不带前缀，补上通用 image 头）
+    # 构建 data URL
     if body.image_base64.startswith("data:"):
         image_url = body.image_base64
     else:
@@ -268,7 +269,18 @@ async def ocr_expense(
     if category not in CATEGORY_NAMES:
         category = "food"
 
-    # 保存记录
+    # 仅解析模式：返回识别结果，不保存（用户核对后通过 POST /records 保存）
+    parsed = {
+        "success": True,
+        "amount": amount,
+        "category": category,
+        "category_label": CATEGORY_NAMES.get(category, category),
+        "description": (description or "")[:500],
+    }
+    if not body.save:
+        return parsed
+
+    # 自动保存模式
     record = ExpenseRecord(
         user_id=current_user.id,
         amount=amount,
@@ -282,11 +294,8 @@ async def ocr_expense(
     await db.refresh(record)
 
     return {
-        "success": True,
+        **parsed,
         "id": record.id,
-        "amount": float(record.amount),
-        "category": CATEGORY_NAMES.get(record.category, record.category),
-        "description": record.description or "",
         "record_date": record.record_date.isoformat(),
         "message": "OCR 识别成功",
     }

@@ -107,11 +107,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
-import { getExpenseRecords, createExpenseRecord, deleteExpenseRecord, getExpenseStats } from '@/api/expense'
-
-// Qwen VL 配置（通过 Vite 代理转发，消除 CORS）
-const QWEN_API_KEY = 'sk-eb7e2d8c69e54053ae167d010e00d08b'
-const QWEN_BASE_URL = '/qwen/chat/completions'  // Vite 代理 → dashscope.aliyuncs.com
+import { getExpenseRecords, createExpenseRecord, deleteExpenseRecord, getExpenseStats, ocrExpense } from '@/api/expense'
 
 // 表单
 const form = ref({ amount: null, category: 'food', description: '' })
@@ -339,7 +335,7 @@ function drawLineChart() {
   })
 }
 
-function onOcrUpload(e) {
+async function onOcrUpload(e) {
   const file = e.target.files?.[0]
   if (!file) return
   ocrLoading.value = true
@@ -347,76 +343,23 @@ function onOcrUpload(e) {
   ocrOk.value = false
   const reader = new FileReader()
   reader.onload = async () => {
-    const dataUrl = reader.result  // 完整 data:image/...;base64,...
+    const dataUrl = reader.result
+    // 提取纯 base64（去掉 data:image/...;base64, 前缀）
+    const base64 = dataUrl.split(',')[1] || dataUrl
     try {
-      // 浏览器直连 Qwen VL API
-      const qwenResp = await fetch(QWEN_BASE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${QWEN_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'qwen-vl-max',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: dataUrl } },
-              {
-                type: 'text',
-                text:
-                  '你是一个饮食消费记账助手。请分析这张账单/小票/支付截图中的消费信息，' +
-                  '以JSON格式返回：\n' +
-                  '{"amount": 金额数字, "category": "分类", "description": "简要描述"}\n\n' +
-                  '分类只能是: food(餐饮), delivery(外卖), snack(零食), drink(饮品), grocery(食材采购)\n' +
-                  '如果无法识别，amount返回0。description用中文简要描述（不超过20字）。' +
-                  '只返回JSON，不要包含其他文字。',
-              },
-            ],
-          }],
-          max_tokens: 300,
-          temperature: 0.1,
-        }),
-      })
-
-      if (!qwenResp.ok) {
-        const errData = await qwenResp.json().catch(() => ({}))
-        throw new Error(errData.error?.message || `API 错误 ${qwenResp.status}`)
-      }
-
-      const data = await qwenResp.json()
-      const content = data.choices?.[0]?.message?.content || ''
-
-      // 解析 JSON（可能被 markdown 包裹）
-      let result
-      try {
-        result = JSON.parse(content)
-      } catch {
-        const match = content.match(/\{[\s\S]*\}/)
-        if (match) result = JSON.parse(match[0])
-        else throw new Error('无法解析识别结果')
-      }
-
-      const amount = parseFloat(result.amount) || 0
-      const category = ['food', 'delivery', 'snack', 'drink', 'grocery'].includes(result.category)
-        ? result.category
-        : 'food'
-      const description = (result.description || '').slice(0, 200)
-
-      if (amount <= 0) {
-        ocrMsg.value = '未能识别有效金额，请检查图片或手动录入'
+      const res = await ocrExpense(base64)
+      if (!res.success) {
+        ocrMsg.value = res.message || 'OCR 识别失败，请手动录入'
         return
       }
-
       // 填入表单，让用户核对修改后再手动点"记录"保存
-      form.value.amount = amount
-      form.value.category = category
-      form.value.description = description
-      const catLabels = { food: '餐饮', delivery: '外卖', snack: '零食', drink: '饮品', grocery: '食材采购' }
-      ocrMsg.value = `已识别 ¥${amount} - ${catLabels[category] || category}，已填入上方表单，请核对后点"记录"`
+      form.value.amount = res.amount
+      form.value.category = res.category
+      form.value.description = res.description
+      ocrMsg.value = `已识别 ¥${res.amount} - ${res.category_label}，已填入上方表单，请核对后点"记录"`
       ocrOk.value = true
     } catch (err) {
-      ocrMsg.value = err.message || 'OCR 识别失败，请手动录入'
+      ocrMsg.value = err?.response?.data?.message || err.message || 'OCR 识别失败，请手动录入'
       ocrOk.value = false
     } finally {
       ocrLoading.value = false
