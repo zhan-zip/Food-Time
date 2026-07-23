@@ -877,7 +877,7 @@ class Comment(Base):
 | food | `/api/foods/*` | ✅ 完整 | 搜索/分类/详情/分页，766条数据 |
 | chat | `/api/chat/*` | ✅ 完整 | SSE流式 + Tool Calling(10工具) + 多模态 |
 | diet | `/api/diet/*` | ✅ 完整 | 饮食记录CRUD + 偏好自动更新 |
-| expense | `/api/expense/*` | ✅ 完整 | 手动录入 + OCR(前端直连Qwen VL) + 统计数据 |
+| expense | `/api/expense/*` | ✅ 完整 | 手动录入 + OCR(后端代理Qwen VL) + 统计数据 |
 | public_food | `/api/public/*` | ✅ 完整 | 广场列表 + 详情 + 评论 + 收藏 + 食谱保存 |
 | custom_food | `/api/custom/*` | ⬜ 骨架 | 仅有模型，路由未实现（P2 DIY拖拽烹饪用） |
 | admin | `/api/admin/*` | ⚠️ 基础 | 仅有基础统计端点 |
@@ -943,7 +943,7 @@ npm run dev
 
 | 决策 | 原因 |
 |------|------|
-| OCR 前端直连 Qwen VL | 后端沙箱终端无法访问 DashScope API，浏览器可通过 Vite 代理转发 |
+| OCR 通过后端代理调用 Qwen VL | 前端上传图片 → 后端 `/api/expense/ocr` 解析 → 返回结果填入表单，API Key 仅存 `.env` |
 | 记账分类仅饮食 | 聚焦"食光记"定位：餐饮/外卖/零食/饮品/食材采购 |
 | curl_cffi 替代 httpx | 美食天下使用 Cloudflare 防护，httpx 返回 403 |
 | ChromaDB 本地向量存储 | 无需外部向量数据库，启动时自动构建食物库索引 |
