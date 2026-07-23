@@ -1,80 +1,84 @@
 <template>
-  <div class="register-page">
-    <div class="register-header">
-      <h1>注册账号</h1>
-      <p>开始你的智能饮食之旅</p>
-    </div>
+  <div class="auth-page">
+    <div class="auth-card">
+      <h1 class="auth-title">注册</h1>
+      <p class="auth-subtitle text-secondary">开启你的食光之旅</p>
 
-    <van-form @submit="handleRegister" class="register-form">
-      <van-cell-group inset>
-        <van-field
-          v-model="form.email"
-          name="email"
-          label="邮箱"
-          placeholder="请输入邮箱"
-          :rules="[{ required: true, message: '请输入邮箱' }]"
-        />
-        <van-field
-          v-model="form.nickname"
-          name="nickname"
-          label="昵称"
-          placeholder="给自己起个昵称（选填）"
-        />
-        <van-field
-          v-model="form.password"
-          type="password"
-          name="password"
-          label="密码"
-          placeholder="至少6位"
-          :rules="[{ required: true, message: '请输入密码' }, { min: 6, message: '密码至少6位' }]"
-        />
-      </van-cell-group>
+      <form @submit.prevent="handleRegister" class="auth-form">
+        <div class="form-group">
+          <label class="form-label">昵称</label>
+          <input v-model="form.nickname" class="input" placeholder="给自己起个名字" required />
+        </div>
 
-      <div style="margin: 16px">
-        <van-button
-          round
-          block
-          type="primary"
-          native-type="submit"
-          :loading="loading"
-        >
-          注册
-        </van-button>
-      </div>
-    </van-form>
+        <div class="form-group">
+          <label class="form-label">邮箱</label>
+          <input v-model="form.email" type="email" class="input" placeholder="请输入邮箱" required />
+        </div>
 
-    <div class="register-footer">
-      <van-button type="primary" size="small" @click="$router.push('/login')">
-        已有账号？去登录
-      </van-button>
+        <div class="form-group">
+          <label class="form-label">密码</label>
+          <input v-model="form.password" type="password" class="input" placeholder="至少6位密码" required minlength="6" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">验证码（开发模式留空即可）</label>
+          <div class="code-row">
+            <input v-model="form.code" class="input" placeholder="输入验证码" />
+            <button type="button" class="btn btn-outline btn-sm" @click="sendCode" :disabled="codeSending">
+              {{ codeSending ? '发送中' : '获取验证码' }}
+            </button>
+          </div>
+        </div>
+
+        <p v-if="errorMsg" class="form-error">{{ errorMsg }}</p>
+
+        <button type="submit" class="btn btn-primary btn-lg auth-submit" :disabled="loading">
+          {{ loading ? '注册中...' : '注册' }}
+        </button>
+      </form>
+
+      <p class="auth-footer text-sm">
+        已有账号？
+        <router-link to="/login" class="text-primary font-medium">去登录</router-link>
+      </p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
-import { register } from '../api/auth'
+import axios from 'axios'
 
 const router = useRouter()
 const loading = ref(false)
-const form = ref({ email: '', password: '', nickname: '' })
+const codeSending = ref(false)
+const errorMsg = ref('')
+const form = reactive({ email: '', password: '', nickname: '', code: '' })
+
+async function sendCode() {
+  if (!form.email) { errorMsg.value = '请先输入邮箱'; return }
+  codeSending.value = true
+  try {
+    await axios.post('/api/auth/send-code', { email: form.email })
+    alert('验证码已发送，开发模式下请查看后端控制台输出')
+  } catch (e) {
+    errorMsg.value = e.response?.data?.detail || '发送失败'
+  } finally {
+    codeSending.value = false
+  }
+}
 
 async function handleRegister() {
   loading.value = true
+  errorMsg.value = ''
   try {
-    const res = await register({
-      email: form.value.email,
-      password: form.value.password,
-      nickname: form.value.nickname || undefined,
-    })
-    localStorage.setItem('token', res.access_token)
-    localStorage.setItem('user', JSON.stringify(res.user))
-    showToast('注册成功')
-    router.push('/home')
+    const res = await axios.post('/api/auth/register', form)
+    localStorage.setItem('token', res.data.access_token)
+    localStorage.setItem('user', JSON.stringify(res.data.user))
+    router.push('/')
   } catch (e) {
-    showToast(e.message || '注册失败')
+    errorMsg.value = e.response?.data?.detail || '注册失败'
   } finally {
     loading.value = false
   }
@@ -82,35 +86,62 @@ async function handleRegister() {
 </script>
 
 <style scoped>
-.register-page {
+.auth-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: var(--spacing-lg);
+  background: linear-gradient(135deg, #D9A15B15 0%, #D8B08C15 100%);
 }
-.register-header {
-  text-align: center;
-  color: #fff;
-  margin-bottom: 40px;
-}
-.register-header h1 {
-  font-size: 36px;
-  margin: 0 0 8px;
-}
-.register-header p {
-  font-size: 16px;
-  opacity: 0.9;
-  margin: 0;
-}
-.register-form {
+.auth-card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  padding: 40px;
   width: 100%;
   max-width: 400px;
-  margin: 0 auto;
+  box-shadow: var(--shadow-lg);
 }
-.register-footer {
+.auth-title {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
   text-align: center;
-  margin-top: 20px;
+  margin-bottom: 4px;
+}
+.auth-subtitle {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+.form-group {
+  margin-bottom: var(--spacing-md);
+}
+.form-label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  margin-bottom: var(--spacing-xs);
+  color: var(--color-text-secondary);
+}
+.code-row {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+.form-error {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-md);
+}
+.auth-submit {
+  width: 100%;
+  margin-top: var(--spacing-sm);
+}
+.auth-footer {
+  text-align: center;
+  margin-top: var(--spacing-lg);
+}
+@media (max-width: 640px) {
+  .auth-card {
+    padding: 28px 20px;
+  }
 }
 </style>

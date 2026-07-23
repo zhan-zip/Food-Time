@@ -2,10 +2,6 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import router from './router'
 import App from './App.vue'
-
-// Vant 样式
-import 'vant/lib/index.css'
-// 全局样式
 import './assets/main.css'
 
 const app = createApp(App)

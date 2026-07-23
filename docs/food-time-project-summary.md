@@ -339,29 +339,48 @@ unplugin-vue-components@0.26, @vant/auto-import-resolver@1.2
 
 ---
 
-### 十一、2026-07-20 响应式布局改造
+### 十一、2026-07-20 T0 桌面端重构（全部推倒重来）
 
-将项目从纯移动端（Vant TabBar always-on）改造为 **响应式网站**，适配参赛展示场景。
+彻底移除 Vant UI，改为纯 CSS 桌面端组件 + 暖色调品牌设计。
 
-**改动**：
-- `index.html`：移除 `maximum-scale=1.0, user-scalable=no`，回归标准 viewport
-- `App.vue`：重写为双布局 — 桌端（≥768px）左侧固定侧边栏 + 主内容区，移动端底部 TabBar
-- `main.css`：新增响应式断点、字体基准、通用卡片和页面容器样式
+**设计依据**：`界面设计初版方案.md`
 
-**桌面端**（≥768px）：
-- 左侧 220px 绿色主题侧边栏（Logo + 导航 + 版本号）
-- 主内容区自适应，max-width 960px 居中
+**品牌更新**：
+- 项目中文名定为「食光记」
+- 简介：一款 AI 驱动的智能饮食助手，帮您解决「今天吃什么」的每一刻
+- 暖色调色板：铜锣烧金 #D9A15B / 奶咖米 #D8B08C / 黑可可 #3A2418
 
-**移动端**（<768px）：
-- 全宽布局，底部 Vant TabBar
-- 14px 基准字体，12px 卡片内边距
+**T0 架构改动**：
 
-**文件改动**：
 | 文件 | 改动 |
 |------|------|
-| `index.html` | viewport 恢复正常 |
-| `App.vue` | 全面重写，双布局 |
-| `main.css` | 响应式样式系统 |
+| `main.js` | 移除 Vant CSS import |
+| `main.css` | 完全重写：CSS 自定义变量暖色系色板 + 通用组件（按钮/卡片/输入框/标签）+ 3 档响应式 |
+| `App.vue` | 完全重写：顶部 sticky navbar + 左侧滑动 sidebar + 汉堡菜单切换 |
+| `router/index.js` | 路由重构：5 个标签 → 12 个路由（6 主导航 + 登录/注册/管理/广场详情） |
+| `package.json` | 移除 vant / @vant/use / unplugin-vue-components / @vant/auto-import-resolver |
+| `vite.config.js` | 移除 Vant 自动导入插件 |
+| `index.html` | 标题改为「食光记」 |
+
+**导航结构**：
+| 路由 | 页面 | 说明 |
+|------|------|------|
+| `/` | 首页 | Banner 轮播 + 每日推荐 + 功能介绍 |
+| `/today-eat` | 今天吃什么 | 搜索/分类筛选/转盘/AI决策入口 |
+| `/diy` | 我的厨房 | 食材篮子 + 调料台 + AI 烹饪建议 |
+| `/square` | 美食广场 | 3 列卡片网格 |
+| `/square/:id` | 食谱详情 | 食材/步骤/营养数据/评论区 |
+| `/expense` | 记账 | 手动录入 + OCR 拍照 + 统计图 |
+| `/assistant` | AI 助手 | 聊天界面 + 快捷提问 + SSE 骨架 |
+| `/about` | 关于我 | 个人信息 + 饮食偏好 + 营养分析 + 退出 |
+| `/admin` | 管理后台 | 数据统计 + 用户管理 + 食谱审核 |
+
+**删除的旧页面**：`Food.vue`、`Chat.vue`、`Profile.vue`
+
+**响应式策略**：
+- 桌面（>768px）：粘性顶栏 + 多列网格布局
+- 移动（≤768px）：顶栏 + 汉堡菜单展开侧栏 + 单列布局
+- 移动（≤640px）：全部单列
 
 ---
 
