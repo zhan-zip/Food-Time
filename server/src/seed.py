@@ -1,10 +1,12 @@
-﻿"""种子数据 - 初始化食物分类和基础食物"""
+"""种子数据 - 初始化食物分类和基础食物"""
 
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from src.food.models import FoodCategory, Food
+from src.auth.models import User
+from src.custom_food.models import CustomRecipe, CustomRecipeIngredient
 from src.database import async_session
 
 
@@ -52,6 +54,7 @@ async def seed_all(db: AsyncSession):
     """初始化种子数据（幂等，重复执行不会重复插入）"""
     await seed_categories(db)
     await seed_foods(db)
+    await seed_recipes(db)
 
 
 async def seed_categories(db: AsyncSession):
@@ -91,6 +94,157 @@ async def seed_foods(db: AsyncSession):
         ))
     await db.flush()
     print(f"[SEED] 已插入 {len(SAMPLE_FOODS)} 条食物数据")
+
+
+SAMPLE_RECIPES = [
+    {
+        "name": "番茄炒蛋",
+        "description": "一道经典的家常菜，酸甜可口，做法简单，是每个中国家庭的必备菜式。番茄的酸甜与鸡蛋的嫩滑完美结合，配米饭绝佳。",
+        "cuisine": "川菜",
+        "category": "川菜",
+        "tags": '{"spicy":"none","temp":"hot","cooking":"stir-fry","level":"entry"}',
+        "calories": 85, "protein": 5.0, "fat": 6.0, "carbs": 4.0,
+        "materials": [{"name": "番茄", "quantity": "2个"}, {"name": "鸡蛋", "quantity": "3个"}],
+        "seasonings": [{"name": "盐", "quantity": "适量"}, {"name": "糖", "quantity": "1茶匙"}, {"name": "葱花", "quantity": "少许"}],
+        "steps": [
+            "番茄洗净切块，鸡蛋打散加少许盐搅匀",
+            "热锅倒油，倒入蛋液炒至凝固盛出",
+            "锅中留底油，倒入番茄块翻炒出汁",
+            "加糖调味，倒回鸡蛋翻炒均匀",
+            "撒上葱花即可出锅"
+        ],
+    },
+    {
+        "name": "宫保鸡丁（家常版）",
+        "description": "宫保鸡丁是川菜中最具国际知名度的菜品之一，鸡丁嫩滑、花生酥脆、麻辣香甜。这个家常版简化了部分步骤，适合家庭厨房。",
+        "cuisine": "川菜",
+        "category": "川菜",
+        "tags": '{"spicy":"medium","temp":"hot","cooking":"stir-fry","level":"medium"}',
+        "calories": 160, "protein": 14.0, "fat": 9.0, "carbs": 8.0,
+        "materials": [{"name": "鸡胸肉", "quantity": "300g"}, {"name": "花生米", "quantity": "50g"}, {"name": "黄瓜", "quantity": "半根"}, {"name": "胡萝卜", "quantity": "半根"}],
+        "seasonings": [{"name": "干辣椒", "quantity": "5-6个"}, {"name": "花椒", "quantity": "1茶匙"}, {"name": "酱油", "quantity": "2汤匙"}, {"name": "醋", "quantity": "1汤匙"}, {"name": "糖", "quantity": "1汤匙"}, {"name": "淀粉", "quantity": "适量"}, {"name": "姜蒜", "quantity": "适量"}],
+        "steps": [
+            "鸡胸肉切丁，加料酒、淀粉、少许盐腌制15分钟",
+            "黄瓜、胡萝卜切丁备用",
+            "调酱汁：酱油、醋、糖、淀粉加水调匀",
+            "热锅凉油，小火炸花生米至金黄捞出",
+            "锅中留底油，爆香花椒干辣椒和姜蒜",
+            "下鸡丁翻炒变色，加入胡萝卜丁翻炒",
+            "倒入酱汁翻炒均匀，加入黄瓜丁和花生米",
+            "大火收汁即可"
+        ],
+    },
+    {
+        "name": "日式味噌汤",
+        "description": "日本料理中最基础的汤品，味道鲜美醇厚，富含蛋白质和益生菌。只需几种简单食材，就能做出一碗暖心暖胃的美味汤品。",
+        "cuisine": "日料",
+        "category": "日料",
+        "tags": '{"spicy":"none","temp":"hot","cooking":"boil","level":"entry"}',
+        "calories": 40, "protein": 3.0, "fat": 1.5, "carbs": 4.0,
+        "materials": [{"name": "嫩豆腐", "quantity": "150g"}, {"name": "海带", "quantity": "10g"}, {"name": "葱花", "quantity": "少许"}],
+        "seasonings": [{"name": "白味噌", "quantity": "2汤匙"}, {"name": "柴鱼片", "quantity": "适量"}],
+        "steps": [
+            "海带提前泡发，切成小片",
+            "锅中加水烧开，放入海带煮5分钟出味",
+            "豆腐切成1.5cm方块，轻轻放入锅中",
+            "转小火，用漏勺将味噌化入汤中（切忌大火沸腾）",
+            "撒入葱花和柴鱼片，关火即可",
+            "注意：味噌不宜久煮，会失去风味"
+        ],
+    },
+    {
+        "name": "黑椒牛排",
+        "description": "西餐经典，外焦里嫩，配上浓郁的黑椒汁，是家庭聚餐和节日宴会的首选主菜。掌握火候就能在家做出餐厅水准。",
+        "cuisine": "西餐",
+        "category": "西餐",
+        "tags": '{"spicy":"low","temp":"hot","cooking":"grill","level":"hard"}',
+        "calories": 250, "protein": 26.0, "fat": 15.0, "carbs": 2.0,
+        "materials": [{"name": "西冷牛排", "quantity": "200g"}, {"name": "芦笋", "quantity": "5根"}, {"name": "小番茄", "quantity": "3个"}],
+        "seasonings": [{"name": "黑胡椒", "quantity": "适量"}, {"name": "海盐", "quantity": "适量"}, {"name": "黄油", "quantity": "20g"}, {"name": "迷迭香", "quantity": "1枝"}, {"name": "蒜瓣", "quantity": "2个"}],
+        "steps": [
+            "牛排提前30分钟从冰箱取出回温，两面撒海盐和黑胡椒",
+            "大火热锅，锅要烧到冒烟",
+            "放入牛排，不要翻动，煎2分钟出焦壳",
+            "翻面再煎2分钟（中等熟度）",
+            "加入黄油、蒜瓣和迷迭香，用勺子淋油",
+            "取出牛排静置5分钟，让肉汁均匀分布",
+            "锅中余油煎芦笋和小番茄作为配菜"
+        ],
+    },
+]
+
+
+async def seed_recipes(db: AsyncSession):
+    result = await db.execute(select(CustomRecipe).limit(1))
+    if result.scalar_one_or_none():
+        print("[SEED] 食谱数据已存在，跳过")
+        return
+
+    # 查找 admin 用户
+    user_q = await db.execute(select(User).where(User.is_admin == True))
+    admin = user_q.scalar_one_or_none()
+    if not admin:
+        user_q = await db.execute(select(User).limit(1))
+        admin = user_q.scalar_one_or_none()
+    if not admin:
+        print("[SEED] 没有用户，跳过食谱种子")
+        return
+
+    cat_result = await db.execute(select(FoodCategory))
+    cat_map = {c.name: c.id for c in cat_result.scalars().all()}
+
+    count = 0
+    for r in SAMPLE_RECIPES:
+        # 创建 Food 记录
+        food = Food(
+            name=r["name"],
+            category_id=cat_map.get(r["category"]),
+            cuisine=r["cuisine"],
+            tags=r["tags"],
+            description=r["description"],
+            source="seed",
+            calories_per_100g=r["calories"],
+            protein_per_100g=r["protein"],
+            fat_per_100g=r["fat"],
+            carbs_per_100g=r["carbs"],
+            is_public=True,
+        )
+        db.add(food)
+        await db.flush()
+
+        # 创建 CustomRecipe
+        recipe = CustomRecipe(
+            user_id=admin.id,
+            food_id=food.id,
+            cooking_steps=r["steps"],
+            is_published=True,
+            publish_status="approved",
+        )
+        db.add(recipe)
+        await db.flush()
+
+        # 创建食材
+        for m in r["materials"]:
+            db.add(CustomRecipeIngredient(
+                recipe_id=recipe.id,
+                ingredient_name=m["name"],
+                quantity=m["quantity"],
+                ingredient_type="ingredient",
+            ))
+
+        # 创建调料
+        for s in r["seasonings"]:
+            db.add(CustomRecipeIngredient(
+                recipe_id=recipe.id,
+                ingredient_name=s["name"],
+                quantity=s["quantity"],
+                ingredient_type="seasoning",
+            ))
+
+        count += 1
+
+    await db.flush()
+    print(f"[SEED] 已插入 {count} 个食谱及食材数据")
 
 
 if __name__ == "__main__":

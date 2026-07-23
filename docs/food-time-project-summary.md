@@ -589,6 +589,103 @@ vue@3.4, vue-router@4.3, pinia@2.1, axios@1.6
 
 ---
 
+## 十五、2026-07-23 美食广场 + 食谱详情 + 评论区
+
+### 一、实现内容
+
+在 P1 阶段开始前，提前补全了美食广场的三个核心页面，从纯静态占位升级为完整功能。
+
+### 二、后端
+
+#### 2.1 新增 Comment 模型
+
+```python
+# server/src/public_food/models.py
+class Comment(Base):
+    __tablename__ = "recipe_comments"
+    id, recipe_id, user_id, content, created_at
+```
+
+#### 2.2 Food 模型增加 description 字段
+
+`server/src/food/models.py`：新增 `description = Column(Text, nullable=True)`
+
+#### 2.3 6 个新 API 端点
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/public/recipes` | GET | 食谱列表（分页 + 作者 + 点赞收藏数） |
+| `/api/public/recipes/{id}` | GET | 食谱详情（食材/调料/步骤/营养/评论数） |
+| `/api/public/recipes/{id}/comments` | GET | 评论列表（含用户昵称） |
+| `/api/public/recipes/{id}/comment` | POST | 发表评论（需登录） |
+| `/api/public/recipes/{id}/save` | POST | 收藏到我的食物库（需登录） |
+| `/api/public/recipes/{id}/save` | DELETE | 取消收藏（需登录） |
+
+#### 2.4 4 个种子食谱
+
+| 食谱 | 菜系 | 食材数 | 步骤数 |
+|------|------|--------|--------|
+| 番茄炒蛋 | 川菜 | 2食材+3调料 | 5步 |
+| 宫保鸡丁（家常版） | 川菜 | 4食材+7调料 | 8步 |
+| 日式味噌汤 | 日料 | 3食材+2调料 | 6步 |
+| 黑椒牛排 | 西餐 | 3食材+5调料 | 7步 |
+
+### 三、前端
+
+#### 3.1 Square.vue（美食广场列表）
+
+- 移除 `v-for="n in 6"` 静态占位
+- 接入 `GET /api/public/recipes` 真实数据
+- 卡片悬停上浮动效 (`transform: translateY(-2px)`)
+- 空状态提示：暂无食谱时显示"还没有人分享食谱"
+
+#### 3.2 SquareDetail.vue（食谱详情）
+
+完全重写，包含以下功能区块：
+
+| 区块 | 实现方式 |
+|------|----------|
+| 食物名 + 作者 + 日期 | `h1` + meta 信息行 |
+| 菜系/难度标签 | `tag tag-primary` + 自定义中文映射 |
+| 食物简介 | 段落文本，行高 1.8 |
+| 食材列表 | 金色背景标签，显示名称+分量 |
+| 调料列表 | 绿色背景标签 |
+| 做法步骤 | `<ol>` 有序列表，1.7 行高 |
+| 营养成分卡片 | 左侧 sticky 侧边栏，2x2 网格 |
+| 添加到我的食物库 | 大按钮，收藏/取消收藏切换 |
+| 评论区 | 发表框 + 评论列表，需登录 |
+| 404 处理 | 食谱不存在时显示错误页 + 返回按钮 |
+
+### 四、修复的 Bug
+
+| Bug | 修复 |
+|-----|------|
+| `/api/api/public/recipes` 双前缀 | `public.js` 路径去掉 `/api` 前缀（`request.js` 已设 `baseURL: '/api'`） |
+| `res.data.items` 取不到数据 | axios 拦截器已返回 `response.data`，改为直接 `res.items` |
+| `e.response?.data?.detail` 取不到 | 拦截器已转 `Error(message)`，改为 `e.message` |
+
+### 五、文件改动
+
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| `server/src/public_food/models.py` | 修改 | 新增 Comment 模型 |
+| `server/src/public_food/router.py` | 重写 | 6 个 API 端点 |
+| `server/src/food/models.py` | 修改 | 新增 description 列 |
+| `server/src/models.py` | 修改 | 注册 Comment |
+| `server/src/seed.py` | 修改 | 新增 4 个种子食谱 |
+| `client/src/api/public.js` | 新增 | 广场 API 封装 |
+| `client/src/views/Square.vue` | 重写 | 接入真实数据 |
+| `client/src/views/SquareDetail.vue` | 重写 | 完整详情页 |
+
+### 六、验证
+
+- ✅ `GET /api/public/recipes` — 返回 4 个食谱、正确分页
+- ✅ `GET /api/public/recipes/1` — 返回番茄炒蛋，含 2食材+3调料+5步骤
+- ✅ 前端广场页加载 4 张卡片，点击跳转详情页
+- ✅ 详情页展示完整信息，评论区未登录时提示登录
+
+---
+
 **最后更新：** 2026-07-23  
 **项目路径：** `d:\Desktop\test\TreaWork\Food-Time\`  
 **开发周期：** 3 个月（至 2026 年 10 月）

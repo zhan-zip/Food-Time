@@ -1,4 +1,4 @@
-﻿"""食物库模型"""
+"""食物库模型"""
 
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Numeric, Boolean, JSON, DateTime, ForeignKey, func, Text
@@ -22,6 +22,7 @@ class Food(Base):
     name = Column(String(200), nullable=False, index=True)
     category_id = Column(Integer, ForeignKey("food_categories.id"), nullable=True, index=True)
     image_url = Column(String(500), nullable=True)
+    description = Column(Text, nullable=True)
     cuisine = Column(String(100), nullable=True, index=True)
     tags = Column(JSON, nullable=True)
     source = Column(String(50), default="scraper")
