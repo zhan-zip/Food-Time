@@ -719,14 +719,29 @@ class Comment(Base):
 
 所有 5 个分类均聚焦饮食消费，去除了购物/交通/娱乐等无关分类。
 
-#### 3.2 OCR 修复
+#### 3.2 OCR 修复（第二轮）
 
 | 文件 | 改动 |
 |------|------|
-| `qwen.py` | `parse_receipt()` 去掉 `response_format` 参数；改用 `temperature=0.1` + Prompt 约束 JSON 输出；返回值改为 `(dict, error)` 元组便于暴露真实错误 |
-| `expense/router.py` OCR 端点 | 接收 `(dict, error)` 元组；`image_base64` 兼容带/不带 `data:` 前缀；错误信息直接返回给前端 |
+| `qwen.py` | `parse_receipt()` 去掉 `response_format` 参数（DashScope 不支持）；返回值改为 `(dict, error)` 元组 |
+| `expense/router.py` OCR 端点 | `image_base64` 兼容带/不带 `data:` 前缀；错误信息透明化 |
 
-#### 3.3 Vite 别名
+→ **仍失败**：沙箱终端无法访问 `dashscope.aliyuncs.com`（即使开梯子，终端网卡与浏览器不同）
+
+
+#### 3.3 OCR 修复（第三轮 — 浏览器直连）
+
+**根因**：后端 Python 运行在沙箱终端，网卡环境与用户浏览器不同，无法直连 DashScope API。
+
+**方案**：参考 `D:\Desktop\网站\食物\index.html` 的做法，OCR 改为前端浏览器直接调用 Qwen VL API，识别成功后再通过 `POST /api/expense/records` 保存到后端。
+
+| 文件 | 改动 |
+|------|------|
+| `Expense.vue` | OCR handler 完全重写：`FileReader` → `fetch(dashscope.aliyuncs.com)` → 解析 JSON → `createExpenseRecord()` |
+
+流程变更：`前端 OCR (浏览器) → 后端保存` 替代 `前端 → 后端 OCR → 后端保存`
+
+#### 3.4 Vite 别名
 
 | 文件 | 改动 |
 |------|------|
