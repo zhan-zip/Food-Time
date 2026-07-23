@@ -20,8 +20,9 @@
 FastAPI 网站服务器 (Python)
   ↕ SQLAlchemy 异步
 MySQL 8.0
-  ↗ DeepSeek API (对话 + Tool Calling)
-  ↗ Qwen VL API (账单 OCR)
+  ↗ DeepSeek API (对话 + Tool Calling + Embedding)
+  ↗ Qwen VL API (账单 OCR + 食物图片识别)
+  ↗ ChromaDB (RAG 向量检索)
 ```
 
 - **前端**：Vue 3 + Vite + 纯 CSS 桌面端组件 + Pinia + Vue Router
@@ -31,92 +32,79 @@ MySQL 8.0
 
 ---
 
-## 三、文件结构（2026-07-20 P0 阶段）
+## 三、文件结构（2026-07-24 P1 阶段）
 
 ```
 Food-Time/
 ├── .gitignore
+├── start.bat                            ← 一键启动脚本
+├── 需求分析说明书.md
+├── 概要设计说明书.md
+├── 数据库设计说明书.md
+├── 界面设计初版方案.md
+├── 新增需求记录.md
 │
-├── docs/                                 ← 项目文档
-│   ├── 需求分析说明书.md
-│   ├── 概要设计说明书.md
-│   ├── 数据库设计说明书.md
-│   └── food-time-project-summary.md      ← 本文档
+├── docs/                                ← 项目文档
+│   ├── food-time-project-summary.md     ← 本文档
+│   └── 项目实施计划.md
 │
-├── client/                               ← 前端项目
+├── client/                              ← 前端项目
 │   ├── package.json
-│   ├── vite.config.js                    ← Vite 配置 + API 代理
+│   ├── vite.config.js                   ← Vite 配置 + /api、/qwen 代理
 │   ├── index.html
 │   └── src/
-│       ├── main.js                       ← 入口
-│       ├── App.vue                       ← 根组件 (顶部导航栏 + 路由)
-│       ├── router/index.js               ← 路由配置 + 登录守卫
+│       ├── main.js
+│       ├── App.vue
+│       ├── router/index.js              ← 11 个路由 + 登录守卫
 │       ├── api/
-│       │   ├── request.js                ← Axios 封装 + JWT 拦截器
-│       │   └── auth.js                   ← 认证 API 封装
-│       ├── assets/main.css               ← 全局样式
-│       └── views/                        ← 页面组件
-│           ├── Login.vue                 ← 登录页
-│           ├── Register.vue              ← 注册页
-│           ├── Home.vue                  ← 首页 (欢迎卡片 + 快捷入口 + 推荐)
-│           ├── Food.vue                  ← 食物库 (搜索 + 分类筛选 + 分页)
-│           ├── Chat.vue                  ← AI 对话 (占位，P1 实现 SSE)
-│           ├── Expense.vue               ← 记账 (占位)
-│           ├── Profile.vue               ← 个人中心 (信息展示 + 退出)
-│           └── Admin.vue                 ← 管理后台 (数据统计)
+│       │   ├── request.js               ← Axios 封装 + JWT 拦截器
+│       │   ├── auth.js
+│       │   ├── expense.js
+│       │   └── public.js
+│       ├── assets/main.css              ← 暖色调全局样式
+│       └── views/
+│           ├── Home.vue                 ← 首页
+│           ├── TodayEat.vue             ← 今天吃什么（搜索+饮食记录）
+│           ├── DIY.vue                  ← 我的厨房（占位）
+│           ├── Square.vue               ← 美食广场（真实数据）
+│           ├── SquareDetail.vue         ← 食谱详情+评论区
+│           ├── Expense.vue              ← 记账（手动录入+OCR识图+统计图表）
+│           ├── Assistant.vue            ← AI助手（SSE流式+快捷决策面板）
+│           ├── About.vue                ← 关于我（个人信息+营养分析图表）
+│           ├── Admin.vue                ← 管理后台（数据统计）
+│           ├── Login.vue                ← 登录
+│           └── Register.vue             ← 注册
 │
-├── start.bat                            ← 一键启动脚本（前后端同时启动）
-│
-└── server/                               ← 后端项目
-    ├── requirements.txt                  ← Python 依赖
-    ├── .env                              ← 环境变量 (gitignored)
-    ├── .env.example                      ← 环境变量模板
+└── server/                              ← 后端项目
+    ├── requirements.txt
+    ├── .env                             ← 环境变量 (gitignored)
+    ├── .env.example
+    ├── import_scraped.py                ← 下厨房数据导入脚本
+    ├── import_meishi.py                 ← 美食天下数据导入脚本
     └── src/
-        ├── main.py                       ← FastAPI 入口 (lifespan 管理)
-        ├── config.py                     ← 配置 (Pydantic Settings)
-        ├── database.py                   ← 异步引擎 + 会话工厂
-        ├── init_db.py                    ← 建表入口
-        ├── dependencies.py               ← JWT 依赖注入
-        ├── models.py                     ← 模型统一导入
-        ├── seed.py                       ← 种子数据 (12 分类 + 20 食物)
-        │
-        ├── auth/                         ← 用户认证模块
-        │   ├── models.py                 ← User, EmailVerification
-        │   ├── schemas.py                ← 请求/响应 Pydantic
-        │   ├── service.py                ← bcrypt 哈希 + JWT + 验证码
-        │   └── router.py                 ← /api/auth/* (注册/登录/验证/个人信息)
-        │
-        ├── food/                         ← 食物库模块
-        │   ├── models.py                 ← FoodCategory, Food
-        │   └── router.py                 ← /api/foods/* (搜索/分类/详情)
-        │
-        ├── chat/                         ← AI 对话模块 (骨架)
-        │   ├── models.py                 ← Conversation, LongMemory
-        │   └── router.py                 ← /api/chat/* (占位)
-        │
-        ├── diet/                         ← 饮食记录模块 (骨架)
-        │   ├── models.py                 ← DietRecord, UserPreference
-        │   └── router.py                 ← /api/diet/* (占位)
-        │
-        ├── expense/                      ← 记账模块 (骨架)
-        │   ├── models.py                 ← ExpenseRecord
-        │   └── router.py                 ← /api/expense/* (占位)
-        │
-        ├── custom_food/                  ← 自定义食物模块 (骨架)
-        │   ├── models.py                 ← CustomRecipe, CustomRecipeIngredient
-        │   └── router.py                 ← /api/custom/* (占位)
-        │
-        ├── public_food/                  ← 公共广场模块 (骨架)
-        │   ├── models.py                 ← Like, Favorite
-        │   └── router.py                 ← /api/public/* (占位)
-        │
-        ├── admin/                        ← 管理后台模块 (骨架)
-        │   └── router.py                 ← /api/admin/* (统计)
-        │
-        └── services/                     ← 外部服务 (骨架)
-            ├── deepseek.py               ← DeepSeek 客户端
-            ├── vision.py                 ← Qwen VL 客户端
-            └── email.py                  ← 邮件服务
+        ├── main.py                      ← FastAPI 入口 (lifespan: 建表+种子+向量索引)
+        ├── config.py
+        ├── database.py
+        ├── init_db.py
+        ├── dependencies.py
+        ├── models.py
+        ├── seed.py
+        ├── auth/                        ← 用户认证（完整）
+        ├── food/                        ← 食物库（完整）
+        ├── chat/                        ← AI 对话（完整: SSE + Tool Calling + RAG）
+        ├── diet/                        ← 饮食记录（完整）
+        ├── expense/                     ← 记账（完整: 手动+OCR+统计）
+        ├── custom_food/                 ← 自定义食物（骨架）
+        ├── public_food/                 ← 公共广场（完整: 列表+详情+评论+收藏）
+        ├── admin/                       ← 管理后台（基础统计）
+        └── services/
+            ├── deepseek.py              ← DeepSeek 客户端（对话+Embedding+Tool Calling）
+            ├── qwen.py                  ← Qwen VL 客户端（OCR+食物分析）
+            ├── email.py                 ← 邮件服务（SMTP）
+            ├── vector_store.py          ← ChromaDB 向量检索
+            ├── nutrition_ref.py         ← 213种食材营养参考数据
+            ├── scraper.py               ← 下厨房爬虫
+            └── scraper_meishi.py        ← 美食天下爬虫（curl_cffi）
 ```
 
 **模块独立性说明**：每个功能模块有独立的 `models.py` + `router.py`，跨模块引用走明确包路径。某个模块（如 chat）出问题，food、auth 等模块完全不受影响。
@@ -173,7 +161,9 @@ npm run dev
 
 ---
 
-## 五、P0 阶段已完成功能
+## 五、P0 阶段已完成功能（P1 阶段已全部升级为完整实现）
+
+> **注**：以下 P0 时标记为"占位"的模块，在 P1 阶段已全部实现为完整功能。此处仅保留原始 P0 功能列表供参考。
 
 ### 用户认证
 
@@ -190,27 +180,24 @@ npm run dev
 
 | 端点 | 功能 | 状态 |
 |------|------|------|
-| `GET /api/foods/categories` | 获取 12 个食物分类 | ✅ |
+| `GET /api/foods/categories` | 获取食物分类 | ✅ |
 | `GET /api/foods` | 关键词搜索 + 分类筛选 + 分页 | ✅ |
 | `GET /api/foods/{id}` | 食物详情 (含营养数据) | ✅ |
 
-### 前端页面
+### 前端页面（P1 完成后）
 
 | 页面 | 功能 | 状态 |
 |------|------|------|
-| 登录/注册 | 绿白渐变背景，表单验证，JWT 存储 | ✅ |
+| 登录/注册 | 完整表单校验 + SMTP邮件验证 + 倒计时 | ✅ |
 | 首页 | 欢迎卡片 + 快捷入口 + 今日推荐 | ✅ |
-| 食物库 | 搜索栏 + 分类标签 + 下拉分页 | ✅ |
-| AI 对话 | 消息界面 + 流式 SSE 骨架 | ✅ (占位) |
-| 记账 | 占位页 | ✅ (占位) |
-| 个人中心 | 用户信息 + 退出 + 管理员入口 | ✅ |
-| 管理后台 | 数据统计展示 | ✅ (占位) |
+| 今天吃什么 | 搜索栏 + 分类标签 + 食物卡片 + "我吃了这个"饮食记录 | ✅ |
+| 我的厨房 | DIY 拖拽烹饪（占位，P2 实现） | ⬜ |
+| 美食广场 | 食谱列表 + 详情页 + 评论区 + 收藏 | ✅ |
+| 记账 | 输入账单 + OCR识别账单截图 + 饼图/折线图统计 | ✅ |
+| AI 助手 | SSE 流式对话 + 10个Tool Calling + RAG + 快捷决策面板 + 图片分析 | ✅ |
+| 关于我 | 个人信息 + 偏好 + 7/30天营养图表 | ✅ |
+| 管理后台 | 数据统计 | ✅ |
 | 路由守卫 | 未登录自动跳转 /login | ✅ |
-
-### 种子数据
-
-- 12 个食物分类：川菜、粤菜、湘菜、鲁菜、日料、韩餐、西餐、小吃、甜品、饮品、面食、粥汤
-- 20 条食物：麻婆豆腐、宫保鸡丁、水煮鱼、白切鸡、叉烧、虾饺、剁椒鱼头、红烧肉、寿司、拉面、石锅拌饭、韩式炸鸡、牛排、意面、煎饼果子、臭豆腐、提拉米苏、奶茶、兰州拉面、皮蛋瘦肉粥
 
 ---
 
@@ -327,6 +314,10 @@ python-dotenv==1.0.1
 aiohttp==3.11.11
 beautifulsoup4==4.12.3
 python-multipart==0.0.19
+chromadb>=0.5.0
+httpx>=0.28
+lxml>=5.0
+curl_cffi>=0.7
 ```
 
 ### 前端 (Node.js)
@@ -402,9 +393,9 @@ vue@3.4, vue-router@4.3, pinia@2.1, axios@1.6
 | 阶段 | 内容 | 状态 |
 |------|------|------|
 | P0 | 项目骨架 + 数据库模型 + 用户认证 + 前端导航 + 种子数据 + 真实邮件验证 | ✅ 已完成 |
-| P1 | AI 对话 (SSE + Tool Calling) + 食物库爬虫 + 饮食记录 + 记账 OCR | 📋 待开始 |
-| P2 | 拖拽烹饪 + 公共广场 + 转盘决策 + 营养分析图表 + 食物决策 | 📋 待开始 |
-| P3 | PWA 离线缓存 + 偏好分析 + 管理后台 + 测试 + 文档完善 | 📋 待开始 |
+| P1 | AI 对话 (SSE + Tool Calling + RAG) + 食物库爬虫(766条) + 饮食记录 + 记账(OCR+统计) + 快捷决策 | ✅ 已完成 |
+| P2 | 拖拽烹饪 + 食物决策（属性筛选/转盘/AI推荐）+ 广场排序/审核 | 📋 待开始 |
+| P3 | PWA 离线缓存 + 管理后台完善 + 测试 + 赛事文档 + 演示视频 + 全面美化 | 📋 待开始 |
 
 ---
 
@@ -860,6 +851,124 @@ class Comment(Base):
 
 ---
 
-**最后更新：** 2026-07-24  
+## 二十、2026-07-24 项目交接（P1 完成，进入 P2）
+
+### 一、当前状态总览
+
+**版本**：v0.2（P1 完成）  
+**日期**：2026-07-24  
+**GitHub**：https://github.com/zhan-zip/Food-Time  
+
+| 维度 | 数据 |
+|------|------|
+| 后端模块 | 8 个（auth/food/chat/diet/expense/custom_food/public_food/admin）全部已注册路由 |
+| 前端页面 | 11 个路由，其中 10 个完整实现，1 个占位(DIY) |
+| 食物库 | 766 条（种子24 + 下厨房197 + 美食天下545），附 213种食材营养数据 |
+| AI 功能 | SSE 流式 + 10 个 Tool Calling + RAG(ChromaDB) + 多模态图片分析 |
+| 数据库 | MySQL 8.0, 14 张表（含 recipe_comments），utf8mb4 |
+
+### 二、已完成模块清单
+
+#### 后端
+
+| 模块 | 路由前缀 | 状态 | 说明 |
+|------|----------|------|------|
+| auth | `/api/auth/*` | ✅ 完整 | 注册/登录/验证码/个人资料，SMTP真实邮件 |
+| food | `/api/foods/*` | ✅ 完整 | 搜索/分类/详情/分页，766条数据 |
+| chat | `/api/chat/*` | ✅ 完整 | SSE流式 + Tool Calling(10工具) + 多模态 |
+| diet | `/api/diet/*` | ✅ 完整 | 饮食记录CRUD + 偏好自动更新 |
+| expense | `/api/expense/*` | ✅ 完整 | 手动录入 + OCR(前端直连Qwen VL) + 统计数据 |
+| public_food | `/api/public/*` | ✅ 完整 | 广场列表 + 详情 + 评论 + 收藏 + 食谱保存 |
+| custom_food | `/api/custom/*` | ⬜ 骨架 | 仅有模型，路由未实现（P2 DIY拖拽烹饪用） |
+| admin | `/api/admin/*` | ⚠️ 基础 | 仅有基础统计端点 |
+
+#### 前端
+
+| 页面 | 文件 | 状态 | 说明 |
+|------|------|------|------|
+| 首页 | `Home.vue` | ✅ | 欢迎卡片 + 快捷入口 + 推荐 |
+| 今天吃什么 | `TodayEat.vue` | ✅ | 搜索 + 分类 + 食物卡片 + "我吃了这个"记录饮食 |
+| 我的厨房 | `DIY.vue` | ⬜ 占位 | P2 拖拽烹饪 |
+| 美食广场 | `Square.vue` | ✅ | 真实数据加载 |
+| 食谱详情 | `SquareDetail.vue` | ✅ | 食材/步骤/营养/评论区/收藏 |
+| 记账 | `Expense.vue` | ✅ | 输入账单 + OCR 识别 + 饼图/折线图 |
+| AI 助手 | `Assistant.vue` | ✅ | SSE 流式 + 快捷决策面板 + 多模态 |
+| 关于我 | `About.vue` | ✅ | 个人信息 + 偏好 + 7/30天营养Canvas图表 |
+| 管理后台 | `Admin.vue` | ✅ | 基础统计 |
+| 登录/注册 | `Login.vue`, `Register.vue` | ✅ | 表单校验 + SMTP验证 + 60s倒计时 |
+
+### 三、P2 待完成
+
+详见 `docs/项目实施计划.md`，核心待办：
+
+| 编号 | 内容 | 优先级 |
+|------|------|--------|
+| P2-1 | DIY 拖拽烹饪：食材拖拽 + AI烹饪建议 + 保存为自定义食物 | 高 |
+| P2-2 | 广场排序（热度/时间）+ 管理员审核 | 中 |
+| P2-3 | 食物决策辅助：属性筛选 + 随机转盘(CSS动画) + AI推荐 | 高 |
+| P3 | PWA 离线缓存 + 管理后台完善(用户管理/食谱审核) + 赛事文档 + 全面美化 | — |
+
+### 四、新增需求记录（未实现）
+
+来源：[新增需求记录.md](file:///d:/Desktop/test/TreaWork/Food-Time/新增需求记录.md)
+
+| 需求 | 状态 | 说明 |
+|------|------|------|
+| 新用户引导步骤（圈出功能+压暗+说明） | ❌ 未开始 | 需前端 Onboarding 组件 |
+| 色盲友好设计 | ❌ 未开始 | 后期 UI 调整时统一处理 |
+
+### 五、快速启动
+
+```powershell
+# 1. MySQL（端口 3307）
+mysql -u root -p -P 3307 -e "CREATE DATABASE IF NOT EXISTS food_time CHARACTER SET utf8mb4"
+
+# 2. 后端
+cd server
+pip install -r requirements.txt
+# 编辑 .env 填入 DEEPSEEK_API_KEY 和 QWEN_API_KEY
+python -m uvicorn src.main:app --host 0.0.0.0 --port 8000
+
+# 3. 前端（新终端）
+cd client
+npm install
+npm run dev
+
+# 或双击项目根目录 start.bat 一键启动
+```
+
+启动后自动：建表(14张) → 种子数据 → 管理员账号 → ChromaDB向量索引
+
+### 六、关键决策记录
+
+| 决策 | 原因 |
+|------|------|
+| OCR 前端直连 Qwen VL | 后端沙箱终端无法访问 DashScope API，浏览器可通过 Vite 代理转发 |
+| 记账分类仅饮食 | 聚焦"食光记"定位：餐饮/外卖/零食/饮品/食材采购 |
+| curl_cffi 替代 httpx | 美食天下使用 Cloudflare 防护，httpx 返回 403 |
+| ChromaDB 本地向量存储 | 无需外部向量数据库，启动时自动构建食物库索引 |
+| 营养数据标注来源 | 所有估算数据 tag 中注明"中国食物成分表（第六版）- 基于食材加权估算" |
+| 不做英文食谱爬取 | 中文数据已达 766 条，远超 500 条目标 |
+
+### 七、已知注意事项
+
+1. **MySQL 端口**：本机 3307（非默认 3306），`.env` 需正确配置
+2. **API Key**：需有效的 DeepSeek + Qwen VL API Key
+3. **邮件**：`.env` 中 SMTP 未配置时，验证码降级打印控制台
+4. **ChromaDB**：启动时构建向量索引，首次启动需等待 Embedding API 调用
+5. **DIY.vue**：`custom_food` 模块仅有模型，路由和页面都是占位
+
+### 八、测试验证方法
+
+1. **食物库**：`GET /api/foods?keyword=番茄` → 应返回多条结果
+2. **AI 对话**：浏览器打开 `/assistant`，点击快捷决策按钮 → AI 应流式回复
+3. **OCR 记账**：打开 `/expense`，上传截图 → 识别结果应填入表单
+4. **饮食记录**：`/today-eat` 搜索食物 → 点击"我吃了这个" → 弹出确认
+5. **Swagger**：`http://localhost:8000/docs` 查看全部 API
+
+---
+
+**最后更新：** 2026-07-24（P1 交接版）  
 **项目路径：** `d:\Desktop\test\TreaWork\Food-Time\`  
-**开发周期：** 3 个月（至 2026 年 10 月）
+**GitHub**：https://github.com/zhan-zip/Food-Time  
+**开发周期：** 2026年7月—10月（3个月），P0+P1 已完成
