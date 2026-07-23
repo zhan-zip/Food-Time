@@ -16,6 +16,14 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/qwen': {
+        target: 'https://dashscope.aliyuncs.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/qwen/, '/compatible-mode/v1'),
+        headers: {
+          'Host': 'dashscope.aliyuncs.com',
+        },
+      },
     },
   },
 })

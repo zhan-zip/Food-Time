@@ -109,10 +109,9 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { getExpenseRecords, createExpenseRecord, deleteExpenseRecord, getExpenseStats } from '@/api/expense'
 
-// Qwen VL 配置（OCR 走浏览器直连 DashScope）
+// Qwen VL 配置（通过 Vite 代理转发，消除 CORS）
 const QWEN_API_KEY = 'sk-eb7e2d8c69e54053ae167d010e00d08b'
-const QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
-const QWEN_MODEL = 'qwen-vl-max'
+const QWEN_BASE_URL = '/qwen/chat/completions'  // Vite 代理 → dashscope.aliyuncs.com
 
 // 表单
 const form = ref({ amount: null, category: 'food', description: '' })
@@ -358,7 +357,7 @@ function onOcrUpload(e) {
           'Authorization': `Bearer ${QWEN_API_KEY}`,
         },
         body: JSON.stringify({
-          model: QWEN_MODEL,
+          model: 'qwen-vl-max',
           messages: [{
             role: 'user',
             content: [
