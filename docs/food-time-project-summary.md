@@ -339,7 +339,33 @@ unplugin-vue-components@0.26, @vant/auto-import-resolver@1.2
 
 ---
 
-## 十一、开发计划
+### 十一、2026-07-20 响应式布局改造
+
+将项目从纯移动端（Vant TabBar always-on）改造为 **响应式网站**，适配参赛展示场景。
+
+**改动**：
+- `index.html`：移除 `maximum-scale=1.0, user-scalable=no`，回归标准 viewport
+- `App.vue`：重写为双布局 — 桌端（≥768px）左侧固定侧边栏 + 主内容区，移动端底部 TabBar
+- `main.css`：新增响应式断点、字体基准、通用卡片和页面容器样式
+
+**桌面端**（≥768px）：
+- 左侧 220px 绿色主题侧边栏（Logo + 导航 + 版本号）
+- 主内容区自适应，max-width 960px 居中
+
+**移动端**（<768px）：
+- 全宽布局，底部 Vant TabBar
+- 14px 基准字体，12px 卡片内边距
+
+**文件改动**：
+| 文件 | 改动 |
+|------|------|
+| `index.html` | viewport 恢复正常 |
+| `App.vue` | 全面重写，双布局 |
+| `main.css` | 响应式样式系统 |
+
+---
+
+## 十二、开发计划
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
@@ -350,7 +376,7 @@ unplugin-vue-components@0.26, @vant/auto-import-resolver@1.2
 
 ---
 
-## 十二、2026-07-20 P0 阶段工作总结（第一轮交接）
+## 十三、2026-07-20 P0 阶段工作总结（第一轮交接）
 
 ### 一、项目骨架搭建
 
@@ -382,7 +408,7 @@ unplugin-vue-components@0.26, @vant/auto-import-resolver@1.2
 ### 五、前端脚手架
 
 - Vue 3 + Vite + Vant UI 移动端组件库
-- TabBar 底部导航（5 个标签页）
+- **响应式双导航**：桌面端（≥768px）侧边栏 + 主内容区；移动端底部 TabBar
 - 路由守卫（未登录 → /login）
 - Axios 拦截器（自动附加 JWT + 401 跳转）
 - Vite proxy 代理 `/api` → 后端
@@ -444,6 +470,6 @@ unplugin-vue-components@0.26, @vant/auto-import-resolver@1.2
 
 ---
 
-**最后更新：** 2026-07-20 17:00  
+**最后更新：** 2026-07-20 18:30  
 **项目路径：** `d:\Desktop\test\TreaWork\Food-Time\`  
 **开发周期：** 3 个月（至 2026 年 10 月）
