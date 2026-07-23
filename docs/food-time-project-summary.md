@@ -815,6 +815,51 @@ class Comment(Base):
 
 ---
 
+## 十九、2026-07-24 P1-2 美食天下爬虫 + P1-1 快捷决策
+
+### 一、P1-2 美食天下爬虫
+
+**问题**：下厨房限流(429)，需换网站继续扩充数据。
+
+**方案**：改用美食天下(home.meishichina.com)，使用 `curl_cffi` 模拟 Chrome 浏览器绕过 Cloudflare 防护。
+
+**技术实现**：
+| 项目 | 说明 |
+|------|------|
+| 反爬方案 | curl_cffi + impersonate="chrome120" 成功返回200 |
+| 解析方式 | BeautifulSoup 定位 `div.detail` → `h2 > a`(菜名) + 原料正则提取 |
+| 数据来源 | 综合列表50页(482条) + 15个分类页补充 |
+| 营养估算 | 复用 NUTRITION_REF + INGREDIENT_ALIAS 食材匹配 |
+
+**结果**：
+- 爬取558条，去重导入**545条**新食谱
+- 数据库总计：**766条**（种子20 + 食谱4 + 下厨房197 + 美食天下545）
+- 超额完成500条目标（达成153%）
+
+### 二、P1-1 FR-30 快捷食物决策
+
+**实现**：Assistant.vue 新增时间感知快捷决策面板。
+
+| 功能 | 说明 |
+|------|------|
+| 时间感知 | 早晨→早餐推荐，午间→午餐推荐，下午→下午茶，晚间→晚餐推荐 |
+| 常驻按钮 | 低热量推荐、快手菜推荐、营养分析 |
+| 重新决策 | 对话后可点击"🎯决策"按钮重新唤出快捷面板 |
+| 触发方式 | 点击快捷按钮后自动填入消息并发送到AI |
+
+### 三、文件改动
+
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| `server/src/services/scraper_meishi.py` | 新增 | 美食天下爬虫（curl_cffi反爬） |
+| `server/import_meishi.py` | 新增 | 美食天下数据导入脚本 |
+| `client/src/views/Assistant.vue` | 修改 | 时间感知快捷决策面板 |
+| `server/requirements.txt` | 修改 | 新增 curl_cffi、lxml、httpx |
+| `docs/项目实施计划.md` | 修改 | P1-2 + P1-1 FR-30 标记完成 |
+| `docs/food-time-project-summary.md` | 修改 | 新增十九节 |
+
+---
+
 **最后更新：** 2026-07-24  
 **项目路径：** `d:\Desktop\test\TreaWork\Food-Time\`  
 **开发周期：** 3 个月（至 2026 年 10 月）

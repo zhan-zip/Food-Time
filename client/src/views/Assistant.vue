@@ -8,9 +8,20 @@
           <span>&#x1F916;</span>
           <h3>你好，我是食光记 AI 助手</h3>
           <p class="text-secondary">可以帮你：搜索食物、推荐食谱、分析营养、查看账单</p>
+        </div>
+
+        <!-- 快捷决策面板（始终可见） -->
+        <div class="quick-decision-panel" v-if="messages.length === 0 || showQuickPanel">
+          <div class="quick-decision-title">快速决策</div>
           <div class="quick-prompts">
-            <button v-for="p in prompts" :key="p" class="tag tag-default" style="cursor: pointer" @click="sendPrompt(p)">
-              {{ p }}
+            <button
+              v-for="p in timeAwarePrompts"
+              :key="p.label"
+              class="quick-prompt-btn"
+              @click="sendPrompt(p.text)"
+            >
+              <span class="prompt-icon">{{ p.icon }}</span>
+              <span class="prompt-label">{{ p.label }}</span>
             </button>
           </div>
         </div>
@@ -41,6 +52,9 @@
 
       <!-- 输入区 -->
       <div class="chat-input-area">
+        <button v-if="!showQuickPanel && messages.length > 0" class="btn btn-ghost btn-sm" style="flex-shrink:0" @click="showQuickPanel = !showQuickPanel" :title="showQuickPanel ? '收起' : '快速决策'">
+          🎯 决策
+        </button>
         <input
           v-model="input"
           class="input"
@@ -55,24 +69,49 @@
     </div>
 
     <p class="text-center text-muted text-sm" style="margin-top: var(--spacing-xl);">
-      AI 对话（SSE 流式 + Tool Calling）将在 P1 阶段接入 DeepSeek API
+      AI 对话基于 DeepSeek API（SSE 流式 + Tool Calling + RAG 知识库增强）
     </p>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 
 const input = ref('')
 const loading = ref(false)
 const messages = ref([])
 const msgContainer = ref(null)
 const currentSession = ref('default')
+const showQuickPanel = ref(true)
+
+// 时间感知快捷决策
+const timeAwarePrompts = computed(() => {
+  const hour = new Date().getHours()
+  const base = [
+    { icon: '🎲', label: '帮我选个晚饭', text: '帮我推荐一个适合晚餐的菜，要有肉有菜，营养均衡' },
+    { icon: '🔥', label: '低热量推荐', text: '推荐几个低热量高蛋白的菜，适合减脂期吃' },
+    { icon: '🍜', label: '快手菜', text: '今天不想做饭太久，推荐几个15分钟内能搞定的快手菜' },
+  ]
+
+  if (hour < 10) {
+    base.unshift({ icon: '🌅', label: '早餐推荐', text: '推荐几个简单快手的早餐，要有营养' })
+  } else if (hour < 14) {
+    base.unshift({ icon: '☀️', label: '午餐推荐', text: '推荐几个适合午餐的菜，荤素搭配' })
+  } else if (hour < 17) {
+    base.unshift({ icon: '🍵', label: '下午茶', text: '推荐几个下午茶小食或饮品' })
+  } else {
+    base.unshift({ icon: '🌙', label: '晚餐推荐', text: '帮我推荐一个适合晚餐的菜，不要太油腻' })
+  }
+
+  base.push({ icon: '📊', label: '营养分析', text: '帮我分析一下我最近的饮食营养情况' })
+  return base
+})
 
 const prompts = ['今天吃什么好？', '推荐一个低热量的菜', '我最近吃得太油了怎么办', '帮我分析一下我的营养摄入']
 
 function sendPrompt(p) {
   input.value = p
+  showQuickPanel.value = false
   send()
 }
 
@@ -206,11 +245,47 @@ function scrollBottom() {
   margin-bottom: var(--spacing-sm);
 }
 .quick-prompts {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--spacing-sm);
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: var(--spacing-lg);
+  padding: 0 var(--spacing-lg) var(--spacing-lg);
+}
+.quick-decision-panel {
+  border-bottom: 1px solid var(--color-divider);
+  padding-top: var(--spacing-md);
+}
+.quick-decision-title {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  padding: 0 var(--spacing-lg);
+  margin-bottom: var(--spacing-sm);
+  font-weight: 500;
+}
+.quick-prompt-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--color-bg-warm);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  transition: all 0.2s;
+}
+.quick-prompt-btn:hover {
+  border-color: var(--color-primary);
+  background: rgba(217, 161, 91, 0.08);
+}
+.prompt-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.prompt-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chat-bubble {
   display: flex;
