@@ -4,30 +4,71 @@
       <h1 class="auth-title">注册</h1>
       <p class="auth-subtitle text-secondary">开启你的食光之旅</p>
 
-      <form @submit.prevent="handleRegister" class="auth-form">
+      <form @submit.prevent="handleRegister" class="auth-form" novalidate>
+        <!-- 昵称 -->
         <div class="form-group">
           <label class="form-label">昵称</label>
-          <input v-model="form.nickname" class="input" placeholder="给自己起个名字" required />
+          <input
+            v-model="form.nickname"
+            class="input"
+            :class="{ 'input--error': errors.nickname }"
+            placeholder="给自己起个名字"
+            @input="clearError('nickname')"
+          />
+          <p v-if="errors.nickname" class="field-hint field-hint--error">{{ errors.nickname }}</p>
         </div>
 
+        <!-- 邮箱 -->
         <div class="form-group">
           <label class="form-label">邮箱</label>
-          <input v-model="form.email" type="email" class="input" placeholder="请输入邮箱" required />
+          <input
+            v-model="form.email"
+            type="email"
+            class="input"
+            :class="{ 'input--error': errors.email }"
+            placeholder="例如 example@qq.com"
+            @input="clearError('email')"
+          />
+          <p v-if="errors.email" class="field-hint field-hint--error">{{ errors.email }}</p>
+          <p v-else class="field-hint">用于接收验证码和找回密码</p>
         </div>
 
+        <!-- 密码 -->
         <div class="form-group">
           <label class="form-label">密码</label>
-          <input v-model="form.password" type="password" class="input" placeholder="至少6位密码" required minlength="6" />
+          <input
+            v-model="form.password"
+            type="password"
+            class="input"
+            :class="{ 'input--error': errors.password }"
+            placeholder="至少6位，包含字母和数字"
+            @input="clearError('password')"
+          />
+          <p v-if="errors.password" class="field-hint field-hint--error">{{ errors.password }}</p>
+          <p v-else class="field-hint">至少6位，建议包含字母和数字</p>
         </div>
 
+        <!-- 验证码 -->
         <div class="form-group">
-          <label class="form-label">验证码（开发模式留空即可）</label>
+          <label class="form-label">验证码</label>
           <div class="code-row">
-            <input v-model="form.code" class="input" placeholder="输入验证码" />
-            <button type="button" class="btn btn-outline btn-sm" @click="sendCode" :disabled="codeSending">
-              {{ codeSending ? '发送中' : '获取验证码' }}
+            <input
+              v-model="form.code"
+              class="input"
+              :class="{ 'input--error': errors.code }"
+              placeholder="输入邮箱中的6位验证码"
+              @input="clearError('code')"
+            />
+            <button
+              type="button"
+              class="btn btn-outline btn-sm"
+              @click="sendCode"
+              :disabled="codeSending || countdown > 0"
+            >
+              {{ countdown > 0 ? `${countdown}秒后重发` : codeSending ? '发送中...' : '获取验证码' }}
             </button>
           </div>
+          <p v-if="codeSent" class="field-hint field-hint--success">验证码已发送到 {{ form.email }}，请查收（检查垃圾箱）</p>
         </div>
 
         <p v-if="errorMsg" class="form-error">{{ errorMsg }}</p>
@@ -48,37 +89,112 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import request from '../api/request'
 
 const router = useRouter()
 const loading = ref(false)
 const codeSending = ref(false)
+const codeSent = ref(false)
+const countdown = ref(0)
 const errorMsg = ref('')
+const errors = reactive({ nickname: '', email: '', password: '', code: '' })
 const form = reactive({ email: '', password: '', nickname: '', code: '' })
 
+function clearError(field) {
+  errors[field] = ''
+  errorMsg.value = ''
+}
+
+// ========== 前端校验 ==========
+function validate() {
+  // 昵称
+  if (!form.nickname.trim()) {
+    errors.nickname = '请输入昵称'
+    return false
+  }
+  if (form.nickname.trim().length < 2) {
+    errors.nickname = '昵称至少2个字'
+    return false
+  }
+
+  // 邮箱
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!form.email.trim()) {
+    errors.email = '请输入邮箱地址'
+    return false
+  }
+  if (!emailRe.test(form.email)) {
+    errors.email = '邮箱格式不正确，例如 example@qq.com'
+    return false
+  }
+
+  // 密码
+  if (!form.password) {
+    errors.password = '请输入密码'
+    return false
+  }
+  if (form.password.length < 6) {
+    errors.password = '密码至少6位'
+    return false
+  }
+  if (!/[a-zA-Z]/.test(form.password) && !/\d/.test(form.password)) {
+    // 纯符号/中文，提示
+    errors.password = '密码需包含字母或数字'
+    return false
+  }
+
+  // 验证码（可选，但后端校验时会检查）
+  if (!form.code.trim()) {
+    errors.code = '请输入验证码'
+    return false
+  }
+
+  return true
+}
+
+// ========== 发送验证码 ==========
 async function sendCode() {
-  if (!form.email) { errorMsg.value = '请先输入邮箱'; return }
+  errorMsg.value = ''
+  if (!form.email.trim()) {
+    errors.email = '请先输入邮箱地址'
+    return
+  }
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRe.test(form.email)) {
+    errors.email = '邮箱格式不正确'
+    return
+  }
+
   codeSending.value = true
   try {
-    await axios.post('/api/auth/send-code', { email: form.email })
-    alert('验证码已发送，开发模式下请查看后端控制台输出')
+    await request.post('/auth/send-code', { email: form.email })
+    codeSent.value = true
+    // 60 秒倒计时
+    countdown.value = 60
+    const timer = setInterval(() => {
+      countdown.value--
+      if (countdown.value <= 0) clearInterval(timer)
+    }, 1000)
   } catch (e) {
-    errorMsg.value = e.response?.data?.detail || '发送失败'
+    errorMsg.value = e.message || '发送失败'
   } finally {
     codeSending.value = false
   }
 }
 
+// ========== 注册 ==========
 async function handleRegister() {
-  loading.value = true
   errorMsg.value = ''
+  if (!validate()) return
+
+  loading.value = true
   try {
-    const res = await axios.post('/api/auth/register', form)
-    localStorage.setItem('token', res.data.access_token)
-    localStorage.setItem('user', JSON.stringify(res.data.user))
+    const res = await request.post('/auth/register', form)
+    localStorage.setItem('token', res.access_token)
+    localStorage.setItem('user', JSON.stringify(res.user))
     router.push('/')
   } catch (e) {
-    errorMsg.value = e.response?.data?.detail || '注册失败'
+    errorMsg.value = e.message || '注册失败'
   } finally {
     loading.value = false
   }
@@ -99,7 +215,7 @@ async function handleRegister() {
   border-radius: var(--radius-lg);
   padding: 40px;
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   box-shadow: var(--shadow-lg);
 }
 .auth-title {
@@ -126,10 +242,38 @@ async function handleRegister() {
   display: flex;
   gap: var(--spacing-sm);
 }
+.code-row .input { flex: 1; }
+.code-row .btn { flex-shrink: 0; white-space: nowrap; }
+
+/* 字段提示 */
+.field-hint {
+  font-size: 12px;
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+.field-hint--error {
+  color: var(--color-danger);
+}
+.field-hint--success {
+  color: var(--color-success);
+}
+
+/* 输入框错误状态 */
+.input--error {
+  border-color: var(--color-danger);
+}
+.input--error:focus {
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.12);
+}
+
 .form-error {
   color: var(--color-danger);
   font-size: var(--font-size-sm);
   margin-bottom: var(--spacing-md);
+  background: rgba(220, 53, 69, 0.06);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
 }
 .auth-submit {
   width: 100%;

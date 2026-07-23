@@ -2,7 +2,7 @@
 
 ## 一、项目概述
 
-基于 FastAPI + Vue 3 + DeepSeek/Qwen VL 的智能饮食辅助 Web 应用，面向「山东省大学生软件设计大赛」AI 创新应用开发赛道。
+基于 FastAPI + Vue 3 + DeepSeek/Qwen VL 的智能饮食辅助网站，面向「山东省大学生软件设计大赛」AI 创新应用开发赛道。
 
 **目录：** `d:\Desktop\test\TreaWork\Food-Time\`
 
@@ -15,16 +15,16 @@
 ## 二、架构
 
 ```
-浏览器 (Vue 3 + Vant UI)
+浏览器 (Vue 3 + 纯 CSS 桌面端组件)
   ↕ HTTP REST + SSE 流式
-FastAPI 应用服务器 (Python)
+FastAPI 网站服务器 (Python)
   ↕ SQLAlchemy 异步
 MySQL 8.0
   ↗ DeepSeek API (对话 + Tool Calling)
   ↗ Qwen VL API (账单 OCR)
 ```
 
-- **前端**：Vue 3 + Vite + Vant UI 移动端组件库 + Pinia + Vue Router
+- **前端**：Vue 3 + Vite + 纯 CSS 桌面端组件 + Pinia + Vue Router
 - **后端**：FastAPI 异步框架，8 个功能模块，JWT 认证
 - **数据库**：MySQL 8.0，13 张表，utf8mb4
 - **AI**：DeepSeek chat 对话与工具调用，Qwen VL 视觉识别
@@ -49,7 +49,7 @@ Food-Time/
 │   ├── index.html
 │   └── src/
 │       ├── main.js                       ← 入口
-│       ├── App.vue                       ← 根组件 (TabBar + 路由)
+│       ├── App.vue                       ← 根组件 (顶部导航栏 + 路由)
 │       ├── router/index.js               ← 路由配置 + 登录守卫
 │       ├── api/
 │       │   ├── request.js                ← Axios 封装 + JWT 拦截器
@@ -65,11 +65,13 @@ Food-Time/
 │           ├── Profile.vue               ← 个人中心 (信息展示 + 退出)
 │           └── Admin.vue                 ← 管理后台 (数据统计)
 │
+├── start.bat                            ← 一键启动脚本（前后端同时启动）
+│
 └── server/                               ← 后端项目
     ├── requirements.txt                  ← Python 依赖
     ├── .env                              ← 环境变量 (gitignored)
     ├── .env.example                      ← 环境变量模板
-    └── app/
+    └── src/
         ├── main.py                       ← FastAPI 入口 (lifespan 管理)
         ├── config.py                     ← 配置 (Pydantic Settings)
         ├── database.py                   ← 异步引擎 + 会话工厂
@@ -136,7 +138,7 @@ mysql -u root -p -P 3307 -e "CREATE DATABASE IF NOT EXISTS food_time CHARACTER S
 cd server
 pip install -r requirements.txt
 # 修改 .env 中的 DATABASE_URL 和 API Key
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn src.main:app --host 0.0.0.0 --port 8000
 ```
 
 启动后自动完成：
@@ -156,9 +158,18 @@ npm run dev
 
 访问：`http://localhost:5173`
 
+### 3. 一键启动（推荐）
+
+```powershell
+# 双击项目根目录的 start.bat
+# 自动启动后端 (8000) 和前端 (5173)
+```
+
 ### 4. 关闭顺序
 
-先关 `npm run dev` (Ctrl+C)，再关 `uvicorn` (Ctrl+C)。
+先关前端 `npm run dev` (Ctrl+C)，再关 `uvicorn` (Ctrl+C)。
+
+**注意**：Windows 下 `start.bat` 在新窗口中启动前后端，关闭对应窗口即可。
 
 ---
 
@@ -170,8 +181,8 @@ npm run dev
 |------|------|------|
 | `POST /api/auth/register` | 邮箱注册，返回 JWT | ✅ |
 | `POST /api/auth/login` | 邮箱登录，返回 JWT | ✅ |
-| `POST /api/auth/send-code` | 发送邮箱验证码 (开发模式打印控制台) | ✅ |
-| `POST /api/auth/verify-email` | 验邮箱证码 | ✅ |
+| `POST /api/auth/send-code` | 发送邮箱验证码（SMTP 真实发邮件 / 未配置时降级控制台） | ✅ |
+| `POST /api/auth/verify-email` | 验证邮箱验证码 | ✅ |
 | `GET /api/auth/me` | JWT 获取当前用户信息 | ✅ |
 | `PUT /api/auth/profile` | 修改昵称/头像 | ✅ |
 
@@ -225,10 +236,14 @@ QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_MODEL=qwen-vl-max
 
 # ========== 邮件 SMTP ==========
-SMTP_HOST=smtp.example.com
+# 部署时按需配置，支持 QQ邮箱/163邮箱/Gmail 等
+# QQ邮箱：SMTP_HOST=smtp.qq.com  SMTP_PORT=587（需开启SMTP服务并获取授权码）
+# 未配置时验证码降级打印到控制台
+SMTP_HOST=smtp.qq.com
 SMTP_PORT=587
-SMTP_USER=noreply@food-time.com
-SMTP_PASSWORD=
+SMTP_USER=your-email@qq.com
+SMTP_PASSWORD=your-auth-code
+SMTP_FROM=your-email@qq.com
 
 # ========== CORS ==========
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
@@ -288,10 +303,9 @@ ADMIN_PASSWORD=admin123
 - **根因**：passlib 1.7.4 不支持 bcrypt 5.0
 - **修复**：改用 `bcrypt` 库直接调用 `bcrypt.hashpw()` / `bcrypt.checkpw()`
 
-### 4. 本机未安装 Node.js (⚠️ 需手动处理)
-- 前端项目文件已创建，但本开发机未安装 Node.js
-- 在 Windows 上安装 Node.js 后，在 `client/` 目录执行 `npm install && npm run dev`
-- 或部署到有 Node.js 的云服务器
+### 4. 本机已安装 Node.js (✅ 已解决)
+- Node.js v24.18.0 + npm 11.16.0 已通过 winget 安装
+- 在 `client/` 目录执行 `npm install && npm run dev` 即可启动前端
 
 ---
 
@@ -318,9 +332,8 @@ python-multipart==0.0.19
 ### 前端 (Node.js)
 
 ```
-vue@3.4, vue-router@4.3, pinia@2.1, axios@1.6, vant@4.8
-@vitejs/plugin-vue@5, vite@5, vite-plugin-pwa@0.17
-unplugin-vue-components@0.26, @vant/auto-import-resolver@1.2
+vue@3.4, vue-router@4.3, pinia@2.1, axios@1.6
+@vitejs/plugin-vue@5, vite@5
 ```
 
 ---
@@ -388,7 +401,7 @@ unplugin-vue-components@0.26, @vant/auto-import-resolver@1.2
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
-| P0 | 项目骨架 + 数据库模型 + 用户认证 + 前端导航 + 种子数据 | ✅ 已完成 |
+| P0 | 项目骨架 + 数据库模型 + 用户认证 + 前端导航 + 种子数据 + 真实邮件验证 | ✅ 已完成 |
 | P1 | AI 对话 (SSE + Tool Calling) + 食物库爬虫 + 饮食记录 + 记账 OCR | 📋 待开始 |
 | P2 | 拖拽烹饪 + 公共广场 + 转盘决策 + 营养分析图表 + 食物决策 | 📋 待开始 |
 | P3 | PWA 离线缓存 + 偏好分析 + 管理后台 + 测试 + 文档完善 | 📋 待开始 |
@@ -426,8 +439,8 @@ unplugin-vue-components@0.26, @vant/auto-import-resolver@1.2
 
 ### 五、前端脚手架
 
-- Vue 3 + Vite + Vant UI 移动端组件库
-- **响应式双导航**：桌面端（≥768px）侧边栏 + 主内容区；移动端底部 TabBar
+- Vue 3 + Vite + 纯 CSS 桌面端组件
+- **响应式双导航**：桌面端（≥768px）顶部导航栏；移动端汉堡菜单 + 侧边栏
 - 路由守卫（未登录 → /login）
 - Axios 拦截器（自动附加 JWT + 401 跳转）
 - Vite proxy 代理 `/api` → 后端
@@ -445,22 +458,22 @@ unplugin-vue-components@0.26, @vant/auto-import-resolver@1.2
 
 | 文件 | 改动类型 |
 |------|----------|
-| `server/app/main.py` | **新增** — FastAPI 入口 + lifespan + 路由注册 |
-| `server/app/config.py` | **新增** — Pydantic Settings 配置管理 |
-| `server/app/database.py` | **新增** — 异步引擎 + 会话工厂 + Base |
-| `server/app/init_db.py` | **新增** — 建表逻辑（解循环导入） |
-| `server/app/dependencies.py` | **新增** — JWT 依赖注入 |
-| `server/app/models.py` | **新增** — 模型统一导入 |
-| `server/app/seed.py` | **新增** — 种子数据 |
-| `server/app/auth/*` | **新增** — 完整认证模块 |
-| `server/app/food/*` | **新增** — 食物库（搜索 + 分类） |
-| `server/app/chat/*` | **新增** — AI 对话（骨架） |
-| `server/app/diet/*` | **新增** — 饮食记录（骨架） |
-| `server/app/expense/*` | **新增** — 记账（骨架） |
-| `server/app/custom_food/*` | **新增** — 自定义食物（骨架） |
-| `server/app/public_food/*` | **新增** — 公共广场（骨架） |
-| `server/app/admin/*` | **新增** — 管理后台（骨架） |
-| `server/app/services/*` | **新增** — 外部服务（骨架） |
+| `服务器/src/main.py` | **新增** — FastAPI 入口 + lifespan + 路由注册 |
+| `服务器/src/config.py` | **新增** — Pydantic Settings 配置管理 |
+| `服务器/src/database.py` | **新增** — 异步引擎 + 会话工厂 + Base |
+| `服务器/src/init_db.py` | **新增** — 建表逻辑（解循环导入） |
+| `服务器/src/dependencies.py` | **新增** — JWT 依赖注入 |
+| `服务器/src/models.py` | **新增** — 模型统一导入 |
+| `服务器/src/seed.py` | **新增** — 种子数据 |
+| `服务器/src/auth/*` | **新增** — 完整认证模块 |
+| `服务器/src/food/*` | **新增** — 食物库（搜索 + 分类） |
+| `服务器/src/chat/*` | **新增** — AI 对话（骨架） |
+| `服务器/src/diet/*` | **新增** — 饮食记录（骨架） |
+| `服务器/src/expense/*` | **新增** — 记账（骨架） |
+| `服务器/src/custom_food/*` | **新增** — 自定义食物（骨架） |
+| `服务器/src/public_food/*` | **新增** — 公共广场（骨架） |
+| `服务器/src/admin/*` | **新增** — 管理后台（骨架） |
+| `服务器/src/services/*` | **新增** — 外部服务（骨架） |
 | `server/.env` | **新增** |
 | `server/.env.example` | **新增** |
 | `server/requirements.txt` | **新增** |
@@ -489,6 +502,93 @@ unplugin-vue-components@0.26, @vant/auto-import-resolver@1.2
 
 ---
 
-**最后更新：** 2026-07-20 18:30  
+## 十四、2026-07-23 登录注册完善 & 邮件系统联调
+
+### 一、发现问题
+
+1. **注册按钮卡住无响应**：前端 `Register.vue` 使用原生 `axios` 发请求到后端 `localhost:8000`，后端未启动时请求无超时配置导致无限等待
+2. **前后端需手动分别启动**：开发体验差，不符合部署预期
+3. **邮箱验证码仅打印控制台**：无法真正发送邮件，注册验证形同虚设
+4. **登录/注册表单无校验提示**：用户输入错误格式的邮箱或密码没有即时反馈
+5. **历史 Bug：登录密码从未被发送**：`auth.js` 的 `login(email, password)` 函数签名与调用不匹配
+
+### 二、功能实现
+
+#### 2.1 真实 SMTP 邮件发送
+
+**新增/修改文件**：
+| 文件 | 改动 |
+|------|------|
+| `服务器/src/services/email.py` | 完全重写：`EmailService` 类支持 SSL(465) 和 STARTTLS(587) 双模式；`send_verification_code()` 发送格式化 HTML 邮件；`is_configured` 自动检测 SMTP 是否就绪 |
+| `服务器/src/auth/router.py` | `send-code` 端点增加 SMTP 真实发送分支，内置降级机制（SMTP 未配置时打印到控制台） |
+| `server/.env.example` | SMTP 配置模板更新为 QQ邮箱默认值 + 详细注释 |
+
+**技术细节**：
+- `smtplib` 是同步阻塞库，会使 FastAPI 异步事件循环卡死
+- 修复方式：用 `asyncio.to_thread()` 将 SMTP 调用丢到线程池执行，避免阻塞主循环
+
+#### 2.2 前端表单校验
+
+**新增**：`Register.vue` 完全重写，`Login.vue` 同步升级
+
+| 校验项 | 规则 | 表现 |
+|--------|------|------|
+| 昵称 | 非空 + ≥2 个字 | 红色边框 + 字段下方红字提示 |
+| 邮箱 | 正则 `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` | 红色边框 + "邮箱格式不正确，例如 example@qq.com" |
+| 密码 | ≥6 位 + 需含字母或数字 | 红色边框 + 对应提示 |
+| 验证码 | 非空 | 红色边框 |
+
+**新增 UI 元素**：
+- 正确时：灰色小字提示（如"用于接收验证码和找回密码"）
+- 验证码已发送：绿色小字 "验证码已发送到 xxx，请查收"
+- 60 秒发送倒计时按钮，防止重复点击
+
+#### 2.3 一键启动脚本
+
+**新增**：`start.bat`（项目根目录）
+- 双击打开两个新窗口分别启动前后端
+- 自动等待 5 秒给数据库初始化
+- 打印启动完成提示和访问地址
+
+#### 2.4 Bug 修复
+
+| Bug | 文件 | 修复 |
+|-----|------|------|
+| `Register.vue` 用原生 axios 无超时 | `Register.vue` | 改用 `request` 实例（30s 超时 + JWT 拦截器） |
+| `Login.vue` 密码从未发送到后端 | `client/src/api/auth.js` | `login(email, password)` 改为独立参数，内部封装 `{ email, password }` |
+| 后端未启动时注册无限等待 | 启动后端 + 前端请求实例超时 | 组合修复 |
+
+#### 2.5 文档术语清理
+
+| 文件 | 改动 |
+|------|------|
+| 全部 5 个 MD 设计文档 | "app"/"App"/"应用" → "服务"/"网站"/"页面" |
+| `服务器/src/main.py` | `"app"` key → `"service"` 描述 |
+
+### 三、验证结果
+
+- ✅ SMTP 连接 `smtp.qq.com:587` 成功，邮件 3.4 秒内发送
+- ✅ `POST /api/auth/send-code` — 返回 `{"message": "验证码已发送到您的邮箱"}`
+- ✅ 退信 `test@test.com` 仅为排查 API 时的测试参数，非注册表单 Bug
+- ✅ 登录/注册表单校验即时反馈，红框 + 小字提示
+- ✅ `start.bat` 一键启动前后端正常
+
+### 四、文件改动清单
+
+| 文件 | 改动类型 |
+|------|----------|
+| `server/src/services/email.py` | **重写** — smtplib 真实发送 + 降级机制 |
+| `server/src/auth/router.py` | **修改** — send-code 增加 SMTP 分支 + `asyncio.to_thread` |
+| `client/src/views/Register.vue` | **重写** — 完整表单校验 + request 实例 + 倒计时 |
+| `client/src/views/Login.vue` | **重写** — 表单校验 + 结构对齐 Register |
+| `client/src/api/auth.js` | **修改** — login 函数签名修复 |
+| `start.bat` | **新增** — 一键启动脚本 |
+| `server/.env.example` | **修改** — SMTP 配置模板 |
+| `server/.env` | **修改** — SMTP_HOST 修正为 smtp.qq.com |
+| `docs/*.md` 全部 5 个文档 | **修改** — "app" 术语替换 |
+
+---
+
+**最后更新：** 2026-07-23  
 **项目路径：** `d:\Desktop\test\TreaWork\Food-Time\`  
 **开发周期：** 3 个月（至 2026 年 10 月）

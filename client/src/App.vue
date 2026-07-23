@@ -1,5 +1,5 @@
 <template>
-  <div id="app-container">
+  <div id="site-container">
     <!-- 登录/注册等无导航页 -->
     <template v-if="isMinimalPage">
       <router-view />

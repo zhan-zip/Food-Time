@@ -4,27 +4,33 @@
       <h1 class="auth-title">登录</h1>
       <p class="auth-subtitle text-secondary">欢迎回到食光记</p>
 
-      <form @submit.prevent="handleLogin" class="auth-form">
+      <form @submit.prevent="handleLogin" class="auth-form" novalidate>
+        <!-- 邮箱 -->
         <div class="form-group">
           <label class="form-label">邮箱</label>
           <input
             v-model="form.email"
             type="email"
             class="input"
+            :class="{ 'input--error': errors.email }"
             placeholder="请输入邮箱"
-            required
+            @input="clearError('email')"
           />
+          <p v-if="errors.email" class="field-hint field-hint--error">{{ errors.email }}</p>
         </div>
 
+        <!-- 密码 -->
         <div class="form-group">
           <label class="form-label">密码</label>
           <input
             v-model="form.password"
             type="password"
             class="input"
+            :class="{ 'input--error': errors.password }"
             placeholder="请输入密码"
-            required
+            @input="clearError('password')"
           />
+          <p v-if="errors.password" class="field-hint field-hint--error">{{ errors.password }}</p>
         </div>
 
         <p v-if="errorMsg" class="form-error">{{ errorMsg }}</p>
@@ -50,11 +56,36 @@ import { login } from '../api/auth'
 const router = useRouter()
 const loading = ref(false)
 const errorMsg = ref('')
+const errors = reactive({ email: '', password: '' })
 const form = reactive({ email: '', password: '' })
 
-async function handleLogin() {
-  loading.value = true
+function clearError(field) {
+  errors[field] = ''
   errorMsg.value = ''
+}
+
+function validate() {
+  if (!form.email.trim()) {
+    errors.email = '请输入邮箱地址'
+    return false
+  }
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRe.test(form.email)) {
+    errors.email = '邮箱格式不正确，例如 example@qq.com'
+    return false
+  }
+  if (!form.password) {
+    errors.password = '请输入密码'
+    return false
+  }
+  return true
+}
+
+async function handleLogin() {
+  errorMsg.value = ''
+  if (!validate()) return
+
+  loading.value = true
   try {
     const res = await login(form.email, form.password)
     localStorage.setItem('token', res.access_token)
@@ -82,7 +113,7 @@ async function handleLogin() {
   border-radius: var(--radius-lg);
   padding: 40px;
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   box-shadow: var(--shadow-lg);
 }
 .auth-title {
@@ -105,10 +136,28 @@ async function handleLogin() {
   margin-bottom: var(--spacing-xs);
   color: var(--color-text-secondary);
 }
+.field-hint {
+  font-size: 12px;
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+.field-hint--error {
+  color: var(--color-danger);
+}
+.input--error {
+  border-color: var(--color-danger);
+}
+.input--error:focus {
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.12);
+}
 .form-error {
   color: var(--color-danger);
   font-size: var(--font-size-sm);
   margin-bottom: var(--spacing-md);
+  background: rgba(220, 53, 69, 0.06);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
 }
 .auth-submit {
   width: 100%;

@@ -24,12 +24,18 @@
           <div class="chat-bubble-avatar">
             {{ msg.role === 'user' ? '\u{1F464}' : '\u{1F916}' }}
           </div>
-          <div class="chat-bubble-text">{{ msg.content }}</div>
+          <div class="chat-bubble-body">
+            <div class="chat-bubble-text">{{ msg.content }}</div>
+            <div v-if="msg.tooling" class="tool-indicator tooling">&#x1F50D; {{ msg.toolMsg }}</div>
+            <div v-else-if="msg.toolMsg && !msg.content" class="tool-indicator tool-done">&#x2705; {{ msg.toolMsg }}</div>
+          </div>
         </div>
 
-        <div v-if="loading" class="chat-bubble chat-bubble--assistant">
+        <div v-if="loading && messages.length > 0 && messages[messages.length-1].role === 'user'" class="chat-bubble chat-bubble--assistant">
           <div class="chat-bubble-avatar">&#x1F916;</div>
-          <div class="chat-bubble-text typing">思考中...</div>
+          <div class="chat-bubble-body">
+            <div class="chat-bubble-text typing">思考中...</div>
+          </div>
         </div>
       </div>
 
@@ -61,6 +67,7 @@ const input = ref('')
 const loading = ref(false)
 const messages = ref([])
 const msgContainer = ref(null)
+const currentSession = ref('default')
 
 const prompts = ['今天吃什么好？', '推荐一个低热量的菜', '我最近吃得太油了怎么办', '帮我分析一下我的营养摄入']
 
@@ -78,15 +85,90 @@ async function send() {
   await nextTick()
   scrollBottom()
 
-  // 模拟 AI 回复（P1 替换为真实 SSE）
-  setTimeout(() => {
-    messages.value.push({
-      role: 'assistant',
-      content: 'AI 对话功能将在 P1 阶段接入 DeepSeek API。届时我将能够：\n\n1. 搜索食物库并推荐合适食物\n2. 查看你的营养摄入数据\n3. 分析饮食偏好给出建议\n4. 推荐个性化食谱\n\n所有建议都将基于真实数据和工具调用，不会凭空编造。',
-    })
+  const token = localStorage.getItem('token')
+  if (!token) {
+    messages.value.push({ role: 'assistant', content: '请先登录后再使用 AI 助手。' })
     loading.value = false
-    nextTick(() => scrollBottom())
-  }, 1000)
+    return
+  }
+
+  try {
+    const response = await fetch('/api/chat/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ content: text, session_id: currentSession.value }),
+    })
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: '请求失败' }))
+      messages.value.push({ role: 'assistant', content: err.detail || '请求失败' })
+      loading.value = false
+      return
+    }
+
+    // 创建助手消息占位
+    let assistantIdx = messages.value.length
+    messages.value.push({ role: 'assistant', content: '' })
+    let toolStatus = null
+
+    // 读取 SSE 流
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let currentEvent = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim()
+        } else if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6))
+            processSSEEvent(currentEvent, data, assistantIdx, toolStatus)
+          } catch { /* ignore parse errors */ }
+          currentEvent = ''
+        }
+      }
+    }
+  } catch (e) {
+    messages.value.push({ role: 'assistant', content: '网络错误：' + e.message })
+  } finally {
+    loading.value = false
+    await nextTick()
+    scrollBottom()
+  }
+}
+
+function processSSEEvent(eventType, data, assistantIdx, toolStatus) {
+  switch (eventType) {
+    case 'tool_start':
+      messages.value[assistantIdx].tooling = true
+      messages.value[assistantIdx].toolMsg = data.message
+      break
+    case 'tool_end':
+      messages.value[assistantIdx].tooling = false
+      messages.value[assistantIdx].toolMsg = data.result_preview
+      break
+    case 'token':
+      messages.value[assistantIdx].content += data.content
+      nextTick(() => scrollBottom())
+      break
+    case 'done':
+      break
+    case 'error':
+      messages.value[assistantIdx].content += '\n\n[错误：' + data.message + ']'
+      break
+  }
 }
 
 function scrollBottom() {
@@ -177,6 +259,25 @@ function scrollBottom() {
 }
 .typing {
   opacity: 0.6;
+}
+.tool-indicator {
+  font-size: var(--font-size-xs);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  margin-top: 4px;
+}
+.tool-indicator.tooling {
+  background: rgba(217, 161, 91, 0.1);
+  color: var(--color-primary-dark);
+  animation: pulse 1.5s infinite;
+}
+.tool-indicator.tool-done {
+  background: rgba(122, 166, 105, 0.1);
+  color: var(--color-success);
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 @media (max-width: 640px) {
   .chat-messages {

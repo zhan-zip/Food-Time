@@ -6,18 +6,18 @@ export function register(data) {
 }
 
 /** 登录 */
-export function login(data) {
-  return request.post('/auth/login', data)
+export function login(email, password) {
+  return request.post('/auth/login', { email, password })
 }
 
 /** 发送验证码 */
-export function sendCode(data) {
-  return request.post('/auth/send-code', data)
+export function sendCode(email) {
+  return request.post('/auth/send-code', { email })
 }
 
 /** 验证邮箱 */
-export function verifyEmail(data) {
-  return request.post('/auth/verify-email', data)
+export function verifyEmail(email, code) {
+  return request.post('/auth/verify-email', { email, code })
 }
 
 /** 获取当前用户 */
