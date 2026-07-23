@@ -107,7 +107,12 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
-import { getExpenseRecords, createExpenseRecord, deleteExpenseRecord, getExpenseStats, ocrExpense } from '@/api/expense'
+import { getExpenseRecords, createExpenseRecord, deleteExpenseRecord, getExpenseStats } from '@/api/expense'
+
+// Qwen VL 配置（OCR 走浏览器直连 DashScope）
+const QWEN_API_KEY = 'sk-eb7e2d8c69e54053ae167d010e00d08b'
+const QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
+const QWEN_MODEL = 'qwen-vl-max'
 
 // 表单
 const form = ref({ amount: null, category: 'food', description: '' })
@@ -340,26 +345,82 @@ function onOcrUpload(e) {
   if (!file) return
   ocrLoading.value = true
   ocrMsg.value = ''
+  ocrOk.value = false
   const reader = new FileReader()
   reader.onload = async () => {
-    const base64 = reader.result.split(',')[1]  // 去掉 data:image/...;base64, 前缀
+    const dataUrl = reader.result  // 完整 data:image/...;base64,...
     try {
-      const res = await ocrExpense(base64)
-      if (res.success) {
-        ocrMsg.value = `识别成功：¥${res.amount} - ${res.category}`
-        ocrOk.value = true
-        loadRecords()
-        loadStats(selectedPeriod.value)
-      } else {
-        ocrMsg.value = res.message || '识别失败，请手动录入'
-        ocrOk.value = false
+      // 浏览器直连 Qwen VL API
+      const qwenResp = await fetch(QWEN_BASE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${QWEN_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: QWEN_MODEL,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: dataUrl } },
+              {
+                type: 'text',
+                text:
+                  '你是一个饮食消费记账助手。请分析这张账单/小票/支付截图中的消费信息，' +
+                  '以JSON格式返回：\n' +
+                  '{"amount": 金额数字, "category": "分类", "description": "简要描述"}\n\n' +
+                  '分类只能是: food(餐饮), delivery(外卖), snack(零食), drink(饮品), grocery(食材采购)\n' +
+                  '如果无法识别，amount返回0。description用中文简要描述（不超过20字）。' +
+                  '只返回JSON，不要包含其他文字。',
+              },
+            ],
+          }],
+          max_tokens: 300,
+          temperature: 0.1,
+        }),
+      })
+
+      if (!qwenResp.ok) {
+        const errData = await qwenResp.json().catch(() => ({}))
+        throw new Error(errData.error?.message || `API 错误 ${qwenResp.status}`)
       }
+
+      const data = await qwenResp.json()
+      const content = data.choices?.[0]?.message?.content || ''
+
+      // 解析 JSON（可能被 markdown 包裹）
+      let result
+      try {
+        result = JSON.parse(content)
+      } catch {
+        const match = content.match(/\{[\s\S]*\}/)
+        if (match) result = JSON.parse(match[0])
+        else throw new Error('无法解析识别结果')
+      }
+
+      const amount = parseFloat(result.amount) || 0
+      const category = ['food', 'delivery', 'snack', 'drink', 'grocery'].includes(result.category)
+        ? result.category
+        : 'food'
+      const description = (result.description || '').slice(0, 200)
+
+      if (amount <= 0) {
+        ocrMsg.value = '未能识别有效金额，请检查图片或手动录入'
+        return
+      }
+
+      // 保存到后端
+      const catLabels = { food: '餐饮', delivery: '外卖', snack: '零食', drink: '饮品', grocery: '食材采购' }
+      await createExpenseRecord({ amount, category, description })
+      ocrMsg.value = `识别成功：¥${amount} - ${catLabels[category] || category} ${description}`
+      ocrOk.value = true
+      loadRecords()
+      loadStats(selectedPeriod.value)
     } catch (err) {
-      ocrMsg.value = 'OCR 服务不可用，请手动录入'
+      ocrMsg.value = err.message || 'OCR 识别失败，请手动录入'
       ocrOk.value = false
     } finally {
       ocrLoading.value = false
-      // 重置 input 以便重新选择同一文件
       if (ocrInput.value) ocrInput.value.value = ''
     }
   }
