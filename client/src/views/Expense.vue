@@ -5,9 +5,9 @@
     <div class="expense-layout">
       <!-- 左侧：录入 + 记录列表 -->
       <div class="expense-left">
-        <!-- 手动录入 -->
+        <!-- 输入账单 -->
         <div class="card">
-          <h3 class="card-title">手动录入</h3>
+          <h3 class="card-title">输入账单</h3>
           <div class="form-group">
             <label class="form-label">金额</label>
             <input v-model.number="form.amount" class="input" type="number" step="0.01" min="0.01" placeholder="0.00" />
@@ -37,9 +37,9 @@
           <p v-if="msg" class="text-sm" :style="{ color: msgOk ? '#52c41a' : '#e74c3c', marginTop: '8px' }">{{ msg }}</p>
         </div>
 
-        <!-- 拍照识别 -->
+        <!-- 识别账单截图 -->
         <div class="card" style="margin-top: var(--spacing-md);">
-          <h3 class="card-title">拍照识别</h3>
+          <h3 class="card-title">识别账单截图</h3>
           <div class="ocr-zone">
             <input
               ref="ocrInput"
@@ -52,7 +52,7 @@
               AI 识别中...
             </div>
             <div v-else-if="!ocrMsg" class="text-center text-muted text-sm" style="padding: 30px 0; cursor: pointer" @click="$refs.ocrInput.click()">
-              点击或拖拽上传小票/账单截图，AI 自动识别金额和分类
+              点击上传小票/支付截图，AI 自动识别金额和分类
             </div>
             <div v-else class="text-sm" :style="{ padding: '16px', color: ocrOk ? '#52c41a' : '#e74c3c' }">
               {{ ocrMsg }}
@@ -408,13 +408,13 @@ function onOcrUpload(e) {
         return
       }
 
-      // 保存到后端
+      // 填入表单，让用户核对修改后再手动点"记录"保存
+      form.value.amount = amount
+      form.value.category = category
+      form.value.description = description
       const catLabels = { food: '餐饮', delivery: '外卖', snack: '零食', drink: '饮品', grocery: '食材采购' }
-      await createExpenseRecord({ amount, category, description })
-      ocrMsg.value = `识别成功：¥${amount} - ${catLabels[category] || category} ${description}`
+      ocrMsg.value = `已识别 ¥${amount} - ${catLabels[category] || category}，已填入上方表单，请核对后点"记录"`
       ocrOk.value = true
-      loadRecords()
-      loadStats(selectedPeriod.value)
     } catch (err) {
       ocrMsg.value = err.message || 'OCR 识别失败，请手动录入'
       ocrOk.value = false
