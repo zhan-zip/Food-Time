@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/expense", tags=["记账"])
 
 class ExpenseRecordCreate(BaseModel):
     amount: float = Field(..., gt=0, le=999999.99, description="金额")
-    category: str = Field(..., description="分类: food/shopping/transport/entertainment/other")
+    category: str = Field(..., description="分类: food(餐饮)/delivery(外卖)/snack(零食)/drink(饮品)/grocery(食材采购)")
     description: str | None = Field(default=None, max_length=500, description="备注")
     record_date: str | None = Field(default=None, description="日期 YYYY-MM-DD，默认今天")
 
@@ -94,8 +94,8 @@ async def expense_records(
 # ==================== 新增账单 ====================
 
 CATEGORY_NAMES = {
-    "food": "餐饮", "shopping": "购物", "transport": "交通",
-    "entertainment": "娱乐", "other": "其他",
+    "food": "餐饮", "delivery": "外卖", "snack": "零食",
+    "drink": "饮品", "grocery": "食材采购",
 }
 
 @router.post("/records")
@@ -245,15 +245,20 @@ async def ocr_expense(
             "message": "Qwen VL 未配置（请在 .env 中填写 QWEN_API_KEY），请手动录入",
         }
 
-    # 构建 data URL
-    image_url = f"data:image/jpeg;base64,{body.image_base64}"
+    # 构建 data URL（image_base64 不带前缀，补上通用 image 头）
+    if body.image_base64.startswith("data:"):
+        image_url = body.image_base64
+    else:
+        image_url = f"data:image;base64,{body.image_base64}"
 
-    result = await qwen_vl.parse_receipt(image_url)
+    result, error = await qwen_vl.parse_receipt(image_url)
+    if error:
+        return {"success": False, "message": f"OCR 识别失败: {error}"}
     if not result:
-        return {"success": False, "message": "识别失败，请手动录入"}
+        return {"success": False, "message": "未能识别有效消费信息，请手动录入"}
 
     amount = float(result.get("amount", 0))
-    category = result.get("category", "other")
+    category = result.get("category", "food")
     description = result.get("description", "")
 
     if amount <= 0:
@@ -261,7 +266,7 @@ async def ocr_expense(
 
     # 验证分类
     if category not in CATEGORY_NAMES:
-        category = "other"
+        category = "food"
 
     # 保存记录
     record = ExpenseRecord(

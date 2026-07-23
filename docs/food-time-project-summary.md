@@ -689,3 +689,55 @@ class Comment(Base):
 **最后更新：** 2026-07-23  
 **项目路径：** `d:\Desktop\test\TreaWork\Food-Time\`  
 **开发周期：** 3 个月（至 2026 年 10 月）
+
+---
+
+## 十六、2026-07-23 记账分类聚焦 + OCR 修复 + Vite 别名修复
+
+### 一、问题发现
+
+1. **记账分类扩散**：原有 5 个分类（餐饮/购物/交通/娱乐/其他）是通用记账模式，偏离"食光记"聚焦饮食的定位
+2. **OCR 始终失败**：Qwen VL 调用从不成功，前端一直显示"识别中..."然后"识别失败"
+3. **前端页面报错**：点击"今天吃什么""关于我"等页面出现黑底错误框
+
+### 二、问题根源
+
+| 问题 | 根因 | 影响范围 |
+|------|------|----------|
+| 记账分类扩散 | 设计时未限制为饮食分类 | `expense/router.py`、`Expense.vue` |
+| OCR 失败 | `qwen.py` 使用了 `response_format={"type": "json_object"}`，DashScope 兼容模式不支持该参数 → API 报错被 `except` 静默吞掉 | `qwen.py`、`expense/router.py` |
+| 前端黑框 | `vite.config.js` 缺少 `@` 别名配置，`About.vue`、`TodayEat.vue`、`Expense.vue` 中 `import from '@/api/*'` 解析失败 | `vite.config.js` |
+
+### 三、修复方案
+
+#### 3.1 分类聚焦饮食
+
+| 文件 | 旧值 | 新值 |
+|------|------|------|
+| `expense/router.py` | `food/shopping/transport/entertainment/other` | `food(餐饮)/delivery(外卖)/snack(零食)/drink(饮品)/grocery(食材采购)` |
+| `Expense.vue` | 同上 | 同上 |
+
+所有 5 个分类均聚焦饮食消费，去除了购物/交通/娱乐等无关分类。
+
+#### 3.2 OCR 修复
+
+| 文件 | 改动 |
+|------|------|
+| `qwen.py` | `parse_receipt()` 去掉 `response_format` 参数；改用 `temperature=0.1` + Prompt 约束 JSON 输出；返回值改为 `(dict, error)` 元组便于暴露真实错误 |
+| `expense/router.py` OCR 端点 | 接收 `(dict, error)` 元组；`image_base64` 兼容带/不带 `data:` 前缀；错误信息直接返回给前端 |
+
+#### 3.3 Vite 别名
+
+| 文件 | 改动 |
+|------|------|
+| `vite.config.js` | 新增 `resolve.alias: { '@': './src' }` 配置 |
+
+### 四、文件改动清单
+
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| `server/src/expense/router.py` | 修改 | CATEGORY_NAMES 改为饮食分类 + OCR 错误透明化 |
+| `server/src/services/qwen.py` | 修改 | parse_receipt 去掉 response_format + 返回错误详情 |
+| `client/vite.config.js` | 修改 | 新增 @ 路径别名 |
+| `client/src/views/Expense.vue` | 修改 | 分类改为饮食聚焦 |
+| `docs/项目实施计划.md` | 修改 | P1-4 标注分类聚焦饮食 |

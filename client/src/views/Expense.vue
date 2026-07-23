@@ -123,10 +123,10 @@ const ocrOk = ref(false)
 
 const categories = [
   { value: 'food', label: '餐饮' },
-  { value: 'shopping', label: '购物' },
-  { value: 'transport', label: '交通' },
-  { value: 'entertainment', label: '娱乐' },
-  { value: 'other', label: '其他' },
+  { value: 'delivery', label: '外卖' },
+  { value: 'snack', label: '零食' },
+  { value: 'drink', label: '饮品' },
+  { value: 'grocery', label: '食材采购' },
 ]
 
 const catMap = {}

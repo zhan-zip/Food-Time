@@ -63,10 +63,10 @@ class QwenVLClient:
             print(f"[QwenVL] 识别失败: {e}")
             return None
 
-    async def parse_receipt(self, image_url: str) -> dict | None:
-        """识别小票/账单图片，提取金额和分类"""
+    async def parse_receipt(self, image_url: str) -> tuple[dict | None, str | None]:
+        """识别小票/账单图片，提取金额和分类。返回 (result_dict, error_msg)"""
         if not self.is_configured:
-            return None
+            return None, "Qwen VL 未配置"
 
         try:
             resp = await self.client.chat.completions.create(
@@ -81,23 +81,35 @@ class QwenVLClient:
                         {
                             "type": "text",
                             "text": (
-                                "请分析这张账单/小票/支付截图，提取以下信息，以JSON格式返回：\n"
+                                "你是一个饮食消费记账助手。请分析这张账单/小票/支付截图中的消费信息，"
+                                "以JSON格式返回：\n"
                                 '{"amount": 金额数字, "category": "分类", "description": "简要描述"}\n\n'
-                                '分类只能是: food(餐饮), shopping(购物), transport(交通), entertainment(娱乐), other(其他)\n'
-                                "如果无法识别金额，amount返回0。description用中文简要描述消费内容（不超过20字）。"
+                                "分类只能是以下之一: food(餐饮), delivery(外卖), snack(零食), drink(饮品), grocery(食材采购)\n"
+                                "如果无法识别，amount返回0。description用中文简要描述（不超过20字）。"
+                                "只返回JSON，不要包含其他文字。"
                             ),
                         },
                     ],
                 }],
                 max_tokens=300,
                 temperature=0.1,
-                response_format={"type": "json_object"},
             )
+            content = resp.choices[0].message.content or ""
+            # 尝试解析 JSON（可能被包裹在 markdown 代码块中）
             import json
-            return json.loads(resp.choices[0].message.content)
+            try:
+                result = json.loads(content)
+            except json.JSONDecodeError:
+                # 尝试从 markdown 代码块或纯文本中提取 JSON
+                import re
+                match = re.search(r'\{[\s\S]*\}', content)
+                if match:
+                    result = json.loads(match.group(0))
+                else:
+                    return None, "无法解析 AI 返回内容"
+            return result, None
         except Exception as e:
-            print(f"[QwenVL] 账单识别失败: {e}")
-            return None
+            return None, str(e)
 
 
 qwen_vl = QwenVLClient()
