@@ -1,4 +1,4 @@
-﻿"""食物库模块 - API 路由（P0：基础搜索+详情）"""
+"""食物库模块 - API 路由（P0：基础搜索+详情 / P2：DIY食材接口）"""
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +7,11 @@ from typing import Optional
 
 from src.database import get_db
 from src.food.models import Food, FoodCategory
+from src.services.ingredient_emoji import (
+    FRIDGE_CATEGORIES, SEASONING_CATEGORY,
+    FRIDGE_LEFT_KEYS, FRIDGE_RIGHT_KEYS,
+    INGREDIENT_EMOJI,
+)
 
 router = APIRouter(prefix="/api/foods", tags=["食物库"])
 
@@ -79,6 +84,89 @@ async def search_foods(
             }
             for f in foods
         ],
+    }
+
+
+# ============================================================
+# P2-1 DIY 食材接口：按冰箱分区返回食材（含 emoji + 色条）
+# 注意：必须在 /{food_id} 之前注册，否则 FastAPI 会把 /ingredients 当 food_id
+# ============================================================
+@router.get("/ingredients")
+async def get_diy_ingredients(db: AsyncSession = Depends(get_db)):
+    """获取 DIY 厨房所需的食材列表，按冰箱分区 + 调料台分组
+
+    返回结构：
+    {
+      "fridge": {
+        "left": [{key, label, color, items: [{id, name, emoji, food_id}]}],  # 肉类+海鲜
+        "right": [{key, label, color, items: [...]}],                          # 蔬菜+豆制品+蛋奶
+      },
+      "seasoning": {key, label, color, items: [{id, name, emoji, food_id}]}
+    }
+    """
+    # 收集所有食材名称
+    all_names: set[str] = set()
+    for cat in FRIDGE_CATEGORIES:
+        all_names.update(cat["items"])
+    seasoning_names = set(SEASONING_CATEGORY["items"])
+
+    # 从数据库查询匹配的 food 记录
+    all_result = await db.execute(
+        select(Food).where(Food.name.in_(list(all_names)))
+    )
+    food_map: dict[str, Food] = {f.name: f for f in all_result.scalars().all()}
+
+    seasoning_result = await db.execute(
+        select(Food).where(Food.name.in_(list(seasoning_names)))
+    )
+    seasoning_food_map: dict[str, Food] = {f.name: f for f in seasoning_result.scalars().all()}
+
+    def build_items(names: list[str], food_map_local: dict[str, Food]) -> list[dict]:
+        items = []
+        for name in names:
+            food = food_map_local.get(name)
+            items.append({
+                "id": str(food.id) if food else None,
+                "food_id": food.id if food else None,
+                "name": name,
+                "emoji": INGREDIENT_EMOJI.get(name, ""),
+                "calories_per_100g": float(food.calories_per_100g) if (food and food.calories_per_100g) else None,
+            })
+        return items
+
+    # 构建冰箱左门（肉类+海鲜）
+    left = []
+    for cat in FRIDGE_CATEGORIES:
+        if cat["key"] in FRIDGE_LEFT_KEYS:
+            left.append({
+                "key": cat["key"],
+                "label": cat["label"],
+                "color": cat["color"],
+                "items": build_items(cat["items"], food_map),
+            })
+
+    # 构建冰箱右门（蔬菜+豆制品+蛋奶）
+    right = []
+    for cat in FRIDGE_CATEGORIES:
+        if cat["key"] in FRIDGE_RIGHT_KEYS:
+            right.append({
+                "key": cat["key"],
+                "label": cat["label"],
+                "color": cat["color"],
+                "items": build_items(cat["items"], food_map),
+            })
+
+    # 构建调料台
+    seasoning = {
+        "key": SEASONING_CATEGORY["key"],
+        "label": SEASONING_CATEGORY["label"],
+        "color": SEASONING_CATEGORY["color"],
+        "items": build_items(SEASONING_CATEGORY["items"], seasoning_food_map),
+    }
+
+    return {
+        "fridge": {"left": left, "right": right},
+        "seasoning": seasoning,
     }
 
 

@@ -59,13 +59,24 @@ Food-Time/
 │       ├── api/
 │       │   ├── request.js               ← Axios 封装 + JWT 拦截器
 │       │   ├── auth.js
+│       │   ├── diy.js                    ← DIY 厨房 API（食材列表+建议+保存+我的菜谱）
 │       │   ├── expense.js
 │       │   └── public.js
+│       ├── components/
+│       │   └── diy/                      ← DIY 厨房组件
+│       │       ├── FridgeSection.vue     ←   双开门冰箱（开合动画+食材选择）
+│       │       ├── IngredientCard.vue    ←   食材卡片（emoji+名称+色条）
+│       │       ├── PlateSection.vue      ←   备菜盘（食材排列+弹入动画）
+│       │       ├── SeasoningRack.vue     ←   调料台（横滚抽屉）
+│       │       ├── CookingPanel.vue      ←   烹饪面板（方式选择+AI建议展示）
+│       │       └── SaveDialog.vue        ←   保存弹窗（菜名+描述+发布到广场）
+│       ├── stores/
+│       │   └── diy.js                    ← DIY 厨房状态管理（Pinia）
 │       ├── assets/main.css              ← 暖色调全局样式
 │       └── views/
 │           ├── Home.vue                 ← 首页
 │           ├── TodayEat.vue             ← 今天吃什么（搜索+饮食记录）
-│           ├── DIY.vue                  ← 我的厨房（占位）
+│           ├── DIY.vue                  ← 我的厨房（双开门冰箱+岛台+飞入动画）
 │           ├── Square.vue               ← 美食广场（真实数据）
 │           ├── SquareDetail.vue         ← 食谱详情+评论区
 │           ├── Expense.vue              ← 记账（手动录入+OCR识图+统计图表）
@@ -94,7 +105,7 @@ Food-Time/
         ├── chat/                        ← AI 对话（完整: SSE + Tool Calling + RAG）
         ├── diet/                        ← 饮食记录（完整）
         ├── expense/                     ← 记账（完整: 手动+OCR+统计）
-        ├── custom_food/                 ← 自定义食物（骨架）
+        ├── custom_food/                 ← 自定义食物（完整: AI建议+保存+我的菜谱+发布广场）
         ├── public_food/                 ← 公共广场（完整: 列表+详情+评论+收藏）
         ├── admin/                       ← 管理后台（基础统计）
         └── services/
@@ -103,6 +114,7 @@ Food-Time/
             ├── email.py                 ← 邮件服务（SMTP）
             ├── vector_store.py          ← ChromaDB 向量检索
             ├── nutrition_ref.py         ← 213种食材营养参考数据
+            ├── ingredient_emoji.py      ← 食材Emoji映射表（50+食材）
             ├── scraper.py               ← 下厨房爬虫
             └── scraper_meishi.py        ← 美食天下爬虫（curl_cffi）
 ```
@@ -879,7 +891,7 @@ class Comment(Base):
 | diet | `/api/diet/*` | ✅ 完整 | 饮食记录CRUD + 偏好自动更新 |
 | expense | `/api/expense/*` | ✅ 完整 | 手动录入 + OCR(后端代理Qwen VL) + 统计数据 |
 | public_food | `/api/public/*` | ✅ 完整 | 广场列表 + 详情 + 评论 + 收藏 + 食谱保存 |
-| custom_food | `/api/custom/*` | ⬜ 骨架 | 仅有模型，路由未实现（P2 DIY拖拽烹饪用） |
+| custom_food | `/api/custom/*` | ✅ 完整 | AI建议 + 保存菜谱 + 我的菜谱列表 + 发布到广场 |
 | admin | `/api/admin/*` | ⚠️ 基础 | 仅有基础统计端点 |
 
 #### 前端
@@ -888,7 +900,7 @@ class Comment(Base):
 |------|------|------|------|
 | 首页 | `Home.vue` | ✅ | 欢迎卡片 + 快捷入口 + 推荐 |
 | 今天吃什么 | `TodayEat.vue` | ✅ | 搜索 + 分类 + 食物卡片 + "我吃了这个"记录饮食 |
-| 我的厨房 | `DIY.vue` | ⬜ 占位 | P2 拖拽烹饪 |
+| 我的厨房 | `DIY.vue` | ✅ 完整 | 双开门冰箱+岛台备菜盘+飞入动画+AI建议+烹饪保存 |
 | 美食广场 | `Square.vue` | ✅ | 真实数据加载 |
 | 食谱详情 | `SquareDetail.vue` | ✅ | 食材/步骤/营养/评论区/收藏 |
 | 记账 | `Expense.vue` | ✅ | 输入账单 + OCR 识别 + 饼图/折线图 |
@@ -897,15 +909,15 @@ class Comment(Base):
 | 管理后台 | `Admin.vue` | ✅ | 基础统计 |
 | 登录/注册 | `Login.vue`, `Register.vue` | ✅ | 表单校验 + SMTP验证 + 60s倒计时 |
 
-### 三、P2 待完成
+### 三、P2 进度（2026-07-24）
 
-详见 `docs/项目实施计划.md`，核心待办：
+详见 `docs/项目实施计划.md`。
 
-| 编号 | 内容 | 优先级 |
-|------|------|--------|
-| P2-1 | DIY 拖拽烹饪：[详见第二十一节核心设计](#二十一p2-1-diy-烹饪核心设计方案) | 高 |
-| P2-2 | 广场排序（热度/时间）+ 管理员审核 | 中 |
-| P2-3 | 食物决策辅助：属性筛选 + 随机转盘(CSS动画) + AI推荐 | 高 |
+| 编号 | 内容 | 状态 |
+|------|------|------|
+| P2-1 | DIY 烹饪：[详见第二十一节](#二十一p2-1-diy-烹饪核心设计方案) | 已完成（冰箱+岛台+飞入动画+AI建议+保存发布） |
+| P2-2 | 广场排序（热度/时间）+ 管理员审核 | 待完成 |
+| P2-3 | 食物决策辅助：属性筛选 + 随机转盘(CSS动画) + AI推荐 | 待完成 |
 | P3 | PWA 离线缓存 + 管理后台完善(用户管理/食谱审核) + 赛事文档 + 全面美化 | — |
 
 ### 四、新增需求记录（未实现）
@@ -984,7 +996,6 @@ npm run dev
 2. **API Key**：需有效的 DeepSeek + Qwen VL API Key
 3. **邮件**：`.env` 中 SMTP 未配置时，验证码降级打印控制台
 4. **ChromaDB**：启动时构建向量索引，首次启动需等待 Embedding API 调用
-5. **DIY.vue**：`custom_food` 模块仅有模型，路由和页面都是占位
 
 
 
@@ -1154,7 +1165,7 @@ INGREDIENT_EMOJI = {
 
 ---
 
-**最后更新：** 2026-07-24（P1 交接版 + P2-1 DIY 设计完成）  
+**最后更新：** 2026-07-24（P2-1 DIY 烹饪功能完成 — 双开门冰箱 + 飞入动画 + AI建议 + 保存发布）  
 **项目路径：** `d:\Desktop\test\TreaWork\Food-Time\`  
 **GitHub**：https://github.com/zhan-zip/Food-Time  
-**开发周期：** 2026年7月—10月（3个月），P0+P1 已完成，P2 设计中
+**开发周期：** 2026年7月—10月（3个月），P0+P1 已完成，P2-1 已完成，P2-2/P2-3 待推进

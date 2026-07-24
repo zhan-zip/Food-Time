@@ -25,7 +25,20 @@ request.interceptors.response.use(
       localStorage.removeItem('token')
       window.location.href = '/login'
     }
-    const msg = error.response?.data?.detail || error.message || '请求失败'
+    // 提取可读错误信息（detail 可能是字符串、数组或对象）
+    let msg = '请求失败'
+    const detail = error.response?.data?.detail
+    if (detail) {
+      if (Array.isArray(detail)) {
+        msg = detail.map(i => i.msg || JSON.stringify(i)).join('; ')
+      } else if (typeof detail === 'object') {
+        msg = detail.msg || detail.message || JSON.stringify(detail)
+      } else {
+        msg = String(detail)
+      }
+    } else {
+      msg = error.message || '请求失败'
+    }
     return Promise.reject(new Error(msg))
   }
 )
