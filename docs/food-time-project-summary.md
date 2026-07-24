@@ -1165,6 +1165,177 @@ INGREDIENT_EMOJI = {
 
 ---
 
+## 二十二、P2-1 DIY 厨房 —— 调试经验与问题修复记录
+
+> 记录开发过程中遇到的技术难点、根因分析和修复方案，供后续迭代参考。
+
+### 问题 1：冰箱打开后立即自动关闭
+
+**现象**：点击冰箱后，冰箱闪烁打开又立刻合上。
+
+**根因分析**：
+- 冰箱关闭逻辑使用 `document.addEventListener('click', onClickOutside)` 监听外部点击
+- Vue 在点击事件处理后触发重渲染，替换了 DOM 节点（冰箱从关闭态 `<div v-if="!open">` 切换到打开态 `<div v-else>`）
+- 同一个 click 事件冒泡到 document 时，`fridgeOuter.value.contains(e.target)` 返回 `false`——因为原 DOM 节点已被 Vue 销毁替换
+- 导致 `onClickOutside` 误判为"外部点击"，执行 `emit('close')`
+
+**修复方案**：
+改用 `pointerdown` 事件替代 `click`。`pointerdown` 在 Vue 重渲染之前触发，此时原 DOM 节点仍然存在，`contains()` 检测正确。参考代码：
+
+```js
+// FridgeSection.vue
+onMounted(() => {
+  document.addEventListener('pointerdown', onClickOutside)
+})
+```
+
+### 问题 2：食材加入备菜盘无弹入动画
+
+**现象**：点击食材卡后盘中直接出现卡片，没有任何动画效果。
+
+**根因分析（两层）**：
+
+**第一层**：`<transition-group>` 默认渲染为 `<span>` 标签，破坏了备菜盘内 `display: flex` 的布局。且被 `v-if/v-else` 包裹时，Vue 的 `<transition-group>` 初次渲染不会触发 enter 动画。
+
+**第二层**：Pinia store 中 `addToPlate` 使用 `plate.value.push()`，虽然数组内容变了，但 `.value` 引用地址不变。子组件 `props.items`（即 `store.plate`）接收的是同一个引用，Vue 的 prop 浅比较判断"未变化"，`watch` 不触发。
+
+**修复方案**：
+放弃 `<transition-group>`，改为手动监听 + CSS class 触发动画：
+
+```js
+// PlateSection.vue
+let lastLength = 0
+watch(() => props.items.length, (newLen) => {
+  if (newLen > lastLength) {
+    for (let i = lastLength; i < newLen; i++) {
+      props.items[i]._animating = true          // 标记动画
+      setTimeout(() => { props.items[i]._animating = false }, 500)
+    }
+  }
+  lastLength = newLen
+})
+```
+
+```html
+<!-- 模板中动态绑定动画 class -->
+<button :class="{ 'fly-in': item._animating }" ...>
+```
+
+```css
+/* 弹入动画关键帧：弹性多阶段 */
+@keyframes plateFlyIn {
+  0%   { transform: translateY(-40px) scale(0.3); opacity: 0; }
+  50%  { transform: translateY(8px) scale(1.08); opacity: 1; }
+  70%  { transform: translateY(-4px) scale(0.94); }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+```
+
+### 问题 3：`[object Object]` 错误提示
+
+**现象**：API 调用失败时，页面上显示 `[object Object]` 而不是可读的错误信息。
+
+**根因分析**：
+- 后端返回的错误信息是对象（例如 `{msg: "xxx"}`）
+- Axios 拦截器中 `new Error(error)` 将对象原样传入，`Error.message` 期望字符串
+- Vue 模板渲染 `{{ error }}` 时调用 `.toString()`，对象显示为 `[object Object]`
+
+**修复方案**：
+在 Axios 响应拦截器中对错误信息做序列化处理：
+
+```js
+// request.js 响应拦截器 error 分支
+let message = error?.response?.data?.detail || error?.message || '请求失败'
+if (Array.isArray(message)) message = message.join('; ')
+if (typeof message === 'object') message = message.msg || message.message || JSON.stringify(message)
+return Promise.reject(new Error(message))
+```
+
+### 问题 4：调料台点击无飞行卡片
+
+**现象**：冰箱食材点击后飞行卡片正常出现，但调料台点击后只有备菜盘弹入，飞行卡片不出现。
+
+**根因分析**：
+- 当时调料台的 `@select` 事件处理直接调用 `store.addToPlate()`，没有经过 `onIngredientSelect()` 函数
+- `onIngredientSelect` 是统一处理飞行卡片创建 + 延迟加入备菜盘的入口函数
+- 冰箱通过此函数 → 有飞行卡片；调料台绕过此函数 → 无飞行卡片
+
+**修复方案**：
+统一调料台和冰箱的事件处理链路：
+
+```html
+<!-- DIY.vue -->
+<SeasoningRack @select="(item, catKey, type, e) => onIngredientSelect(item, type, e)" />
+```
+
+同时修改 `SeasoningRack.vue` 和 `IngredientCard.vue` 的事件传递，确保原生 DOM 事件对象能逐层传递到 `onIngredientSelect`：
+
+```html
+<!-- IngredientCard.vue -->
+<button @click="$emit('click', $event)">
+
+<!-- SeasoningRack.vue -->
+<IngredientCard @click="onSelect(item, 'seasoning', $event)" />
+```
+
+```js
+// SeasoningRack.vue
+function onSelect(item, type, e) {
+  emit('select', item, type, type, e)  // 传递原生事件 e
+}
+```
+
+### 问题 5：飞入动画效果生硬 → 弧线飞行优化
+
+**现象**：初版飞行动画使用 CSS `transition` 做匀速直线运动，视觉效果呆板。
+
+**优化方案**：
+从 CSS `transition` 改为 JavaScript `requestAnimationFrame` 逐帧动画，实现四阶段效果：
+
+| 阶段 | 时间(ms) | 实现方式 |
+|------|----------|----------|
+| 拾取放大 | 0-50 | `scale: 1 → 1.12` |
+| 弧线飞行 | 50-420 | 缓出三次方插值 + `Math.sin(π·progress)` 正弦弧线偏移 |
+| 弹跳到达 | 420-620 | `cubic-bezier(0.34, 1.56, 0.64, 1)` 弹性缩放 |
+| 淡出消失 | 620-870 | `opacity: 1 → 0` + `scale: 0.8 → 0.4` |
+
+关键代码片段：
+
+```js
+// 弧线偏移：正弦曲线，飞行中间点最高
+const arcY = -Math.sin(raw * Math.PI) * ARC_HEIGHT
+
+// 缓出三次方，确保尾部减速
+const ease = 1 - Math.pow(1 - raw, 3)
+
+// 当前坐标
+const cx = sx + (tx - sx) * ease
+const cy = sy + (ty - sy) * ease + arcY
+
+card.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%) scale(${scale})`
+```
+
+**时序配合**：
+```
+0ms     → 点击食材卡 → 飞行卡片出现，开始弧线飞行
+350ms   → store.addToPlate → 备菜盘卡片开始弹入(450ms)
+420ms   → 飞行卡片到达 → 弹跳淡出(450ms)
+870ms   → 飞行卡片完全移除
+```
+
+### 技术要点总结
+
+| 要点 | 说明 |
+|------|------|
+| 冰箱关闭检测 | 使用 `pointerdown` 而非 `click`，避免 Vue 重渲染导致的 DOM 引用失效 |
+| 动画触发机制 | 放弃 `<transition-group>`，改用 `watch` + CSS class 手动控制，更灵活可控 |
+| 跨组件事件传递 | 逐层传递原生 `$event` 对象，使飞行卡片能准确获取源元素 `getBoundingClientRect()` |
+| 复杂动画实现 | CSS transition 适合简单过渡，JS `requestAnimationFrame` 适合多阶段、非线性轨迹 |
+| 时序协调 | 飞行(420ms) / 弹入(450ms) / 弹跳(450ms) 三段时间配合，通过 `setTimeout` 控制触发点 |
+| 错误信息处理 | 始终在边界层（axios 拦截器）对错误做类型序列化，确保下游拿到的是字符串 |
+
+---
+
 **最后更新：** 2026-07-24（P2-1 DIY 烹饪功能完成 — 双开门冰箱 + 飞入动画 + AI建议 + 保存发布）  
 **项目路径：** `d:\Desktop\test\TreaWork\Food-Time\`  
 **GitHub**：https://github.com/zhan-zip/Food-Time  
