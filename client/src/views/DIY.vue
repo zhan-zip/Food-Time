@@ -46,7 +46,16 @@
           </template>
           <template v-else>
             <p class="text-sm" style="color:#52c41a">{{ store.lastSavedRecipe?.message || '菜谱已保存' }}</p>
-            <button class="btn btn-outline" @click="store.clearPlate()">🔄 再做一道</button>
+            <div class="done-actions">
+              <button class="btn btn-outline" @click="store.clearPlate()">🔄 再做一道</button>
+              <button
+                v-if="!store.lastSavedRecipe?.published"
+                class="btn btn-primary"
+                @click="handlePublishFromDone"
+              >
+                📤 发布到广场
+              </button>
+            </div>
           </template>
         </div>
       </div>
@@ -160,7 +169,16 @@
           </template>
           <template v-else>
             <p class="text-sm" style="color:#52c41a">{{ store.lastSavedRecipe?.message || '菜谱已保存' }}</p>
-            <button class="btn btn-outline" @click="store.clearPlate()" style="margin-top:8px">🔄 再做一道</button>
+            <div class="done-actions" style="justify-content:center">
+              <button class="btn btn-outline" @click="store.clearPlate()">🔄 再做一道</button>
+              <button
+                v-if="!store.lastSavedRecipe?.published"
+                class="btn btn-primary"
+                @click="handlePublishFromDone"
+              >
+                📤 发布到广场
+              </button>
+            </div>
           </template>
         </div>
       </div>
@@ -171,10 +189,14 @@
       :visible="store.showSaveDialog"
       :default-name="store.aiSuggestion?.name || ''"
       :method-label="store.cookingMethods.find(m => m.key === store.cookingMethod)?.label || '炒锅'"
+      :current-method="store.cookingMethod"
+      :cooking-methods="store.cookingMethods"
+      :saved-result="store.lastSavedRecipe"
       @cancel="store.showSaveDialog = false"
       @save="({ name, description, publishToSquare }) => handleSave(name, description, publishToSquare)"
-      @publish="handlePublish()"
-      @done="store.showSaveDialog = false"
+      @publish="handlePublishFromDialog"
+      @done="store.showSaveDialog = false; store.stage = 'done'"
+      @update-method="v => store.cookingMethod = v"
     />
   </div>
 </template>
@@ -344,14 +366,22 @@ async function handleSave(name, description, publishToSquare) {
   await store.doSave({ name, description, publishToSquare })
 }
 
-async function handlePublish() {
-  // 已保存但未发布，用相同数据再保存一次 published=true
-  await store.doSave({
-    name: store.lastSavedRecipe?.name || store.aiSuggestion?.name || 'DIY菜谱',
-    description: '',
-    publishToSquare: true,
-  })
+// 从弹窗中点击"发布到广场"
+async function handlePublishFromDialog() {
+  const res = await store.doPublishToSquare()
+  if (res?.success) {
+    store.lastSavedRecipe.message = res.message || '已提交审核'
+  }
   store.showSaveDialog = false
+  store.stage = 'done'
+}
+
+// 从 done 状态点击"发布到广场"
+async function handlePublishFromDone() {
+  const res = await store.doPublishToSquare()
+  if (res?.success) {
+    store.lastSavedRecipe.message = res.message || '已提交审核'
+  }
 }
 </script>
 
@@ -397,6 +427,9 @@ async function handlePublish() {
 }
 .save-prompt .btn {
   margin-top: 8px;
+}
+.done-actions {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px;
 }
 
 /* ==================== 桌面/平板布局 ==================== */

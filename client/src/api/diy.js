@@ -19,3 +19,8 @@ export function saveRecipe(data) {
 export function getMyRecipes() {
   return request.get('/custom/my')
 }
+
+/** 将已保存食谱发布到广场 */
+export function publishRecipe(recipeId) {
+  return request.put(`/custom/${recipeId}/publish`)
+}

@@ -62,6 +62,12 @@ const routes = [
     meta: { title: '注册' },
   },
   {
+    path: '/admin/login',
+    name: 'AdminLogin',
+    component: () => import('../views/AdminLogin.vue'),
+    meta: { title: '管理员登录' },
+  },
+  {
     path: '/admin',
     name: 'Admin',
     component: () => import('../views/Admin.vue'),
@@ -77,10 +83,34 @@ const router = createRouter({
   },
 })
 
-// 路由守卫：未登录跳转登录页
+// 检查当前 token 的用户是否是管理员
+function isAdminUser() {
+  try {
+    const userStr = localStorage.getItem('user')
+    if (!userStr) return false
+    const user = JSON.parse(userStr)
+    return !!user.is_admin
+  } catch {
+    return false
+  }
+}
+
+// 路由守卫：未登录 → 登录页；非管理员 → 管理员登录页
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('token')
-  const publicPages = ['Login', 'Register']
+  const publicPages = ['Login', 'Register', 'AdminLogin']
+
+  // 需要管理员权限的路由
+  if (to.meta.requireAdmin) {
+    if (!token) {
+      return next('/admin/login')
+    }
+    if (!isAdminUser()) {
+      // 已登录但不是管理员 → 跳转到管理员登录页
+      return next('/admin/login')
+    }
+    return next()
+  }
 
   if (!token && !publicPages.includes(to.name)) {
     next('/login')

@@ -41,7 +41,9 @@
             </div>
             <div class="form-group">
               <label class="form-label">烹饪方式</label>
-              <input class="input" :value="methodLabel" readonly style="color: var(--color-text-muted);" />
+              <select class="input" v-model="cookingMethod" @change="$emit('updateMethod', cookingMethod)">
+                <option v-for="m in cookingMethods" :key="m.key" :value="m.key">{{ m.label }}</option>
+              </select>
             </div>
             <div class="dialog-actions">
               <button type="button" class="btn btn-outline" @click="step = 0">上一步</button>
@@ -73,13 +75,20 @@ const props = defineProps({
   defaultName: { type: String, default: '' },
   methodLabel: { type: String, default: '炒锅' },
   savedResult: { type: Object, default: null },
+  cookingMethods: { type: Array, default: () => [
+    { key: 'wok', label: '炒锅' },
+    { key: 'air_fryer', label: '空气炸锅' },
+    { key: 'steamer', label: '蒸锅' },
+  ]},
+  currentMethod: { type: String, default: 'wok' },
 })
 
-const emit = defineEmits(['cancel', 'save', 'publish', 'done'])
+const emit = defineEmits(['cancel', 'save', 'publish', 'done', 'updateMethod'])
 
 const step = ref(0)
 const name = ref('')
 const description = ref('')
+const cookingMethod = ref(props.currentMethod)
 
 // 重置
 watch(() => props.visible, (v) => {
@@ -87,6 +96,7 @@ watch(() => props.visible, (v) => {
     step.value = 0
     name.value = props.defaultName || ''
     description.value = ''
+    cookingMethod.value = props.currentMethod
   }
 })
 

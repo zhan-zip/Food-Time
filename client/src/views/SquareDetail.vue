@@ -32,6 +32,10 @@
               <div class="nutrition-item"><span>脂肪</span><strong>{{ recipe.fat || '-' }}g</strong></div>
               <div class="nutrition-item"><span>碳水</span><strong>{{ recipe.carbs || '-' }}g</strong></div>
             </div>
+            <div class="nutrition-disclaimer">
+              <p class="text-xs">📊 数据来源：中国食物成分表（第六版），基于食材加权估算</p>
+              <p v-if="recipe.ai_confidence || recipe.source === 'custom'" class="text-xs" style="color:#b8860b; margin-top:2px">⚠️ 营养数据为 AI 估算，仅供参考，非医疗诊断结果</p>
+            </div>
           </div>
 
           <!-- 收藏按钮 -->
@@ -305,6 +309,12 @@ watch(() => route.params.id, fetchDetail)
 .nutrition-item strong {
   font-size: var(--font-size-base);
   color: var(--color-primary-dark);
+}
+.nutrition-disclaimer {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px dashed var(--color-border);
+  color: var(--color-text-muted);
 }
 .save-btn {
   width: 100%;

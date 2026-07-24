@@ -20,35 +20,42 @@ router = APIRouter(prefix="/api/public", tags=["公共广场"])
 async def browse_recipes(
     page: int = Query(1, ge=1),
     page_size: int = Query(12, ge=1, le=50),
+    sort_by: str = Query("time", description="time=最新 / hot=最热"),
+    cuisine: str = Query("", description="筛选菜系"),
+    order: str = Query("desc", description="desc=降序(最新/最热在前) / asc=升序"),
     db: AsyncSession = Depends(get_db),
 ):
-    """浏览已发布的食谱列表"""
-    # 统计总数
-    count_q = select(func.count(CustomRecipe.id)).where(
+    """浏览已发布的食谱列表（支持排序和分类筛选）"""
+    # 基础条件
+    conditions = [
         CustomRecipe.is_published == True,
         CustomRecipe.publish_status == "approved",
-    )
+    ]
+    if cuisine:
+        conditions.append(Food.cuisine == cuisine)
+
+    # 统计总数
+    count_q = select(func.count(CustomRecipe.id)).join(Food, CustomRecipe.food_id == Food.id).where(and_(*conditions))
     total = (await db.execute(count_q)).scalar() or 0
 
-    # 分页查询
+    # 排序方向
+    desc = order == "desc"
+    order_clause = CustomRecipe.created_at.desc() if desc else CustomRecipe.created_at.asc()
+
     offset = (page - 1) * page_size
     q = (
         select(CustomRecipe, Food, User)
         .join(Food, CustomRecipe.food_id == Food.id)
         .join(User, CustomRecipe.user_id == User.id)
-        .where(
-            CustomRecipe.is_published == True,
-            CustomRecipe.publish_status == "approved",
-        )
-        .order_by(CustomRecipe.created_at.desc())
+        .where(and_(*conditions))
+        .order_by(order_clause)
         .offset(offset)
-        .limit(page_size)
+        .limit(page_size * 3 if sort_by == "hot" else page_size)
     )
     rows = (await db.execute(q)).all()
 
     items = []
     for recipe, food, user in rows:
-        # 点赞/收藏数
         like_count = (await db.execute(
             select(func.count(Like.id)).where(Like.recipe_id == recipe.id)
         )).scalar() or 0
@@ -66,10 +73,16 @@ async def browse_recipes(
             "calories": str(food.calories_per_100g) if food.calories_per_100g else None,
             "like_count": like_count,
             "fav_count": fav_count,
+            "hot_score": like_count * 2 + fav_count,
             "created_at": recipe.created_at.isoformat() if recipe.created_at else None,
         })
 
-    return {"items": items, "total": total, "page": page, "page_size": page_size}
+    # 热度排序
+    if sort_by == "hot":
+        items.sort(key=lambda x: x["hot_score"], reverse=desc)
+        items = items[:page_size]
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "sort_by": sort_by, "cuisine": cuisine, "order": order}
 
 
 # ==================== 食谱详情 ====================
@@ -143,6 +156,7 @@ async def get_recipe_detail(
         "like_count": like_count,
         "fav_count": fav_count,
         "comment_count": comment_count,
+        "source": food.source if hasattr(food, "source") else None,
         "created_at": recipe.created_at.isoformat() if recipe.created_at else None,
     }
 

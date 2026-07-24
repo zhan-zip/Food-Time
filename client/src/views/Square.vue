@@ -3,6 +3,21 @@
     <h2 class="section-title">美食广场</h2>
     <p class="text-secondary mb-lg">发现其他食光记用户分享的创意食谱，找到属于你的烹饪灵感</p>
 
+    <!-- 排序 + 筛选工具栏 -->
+    <div class="square-toolbar">
+      <div class="sort-btns">
+        <button class="sort-btn" :class="{ active: sortBy === 'time' }" @click="switchSort('time')">🕐 最新</button>
+        <button class="sort-btn" :class="{ active: sortBy === 'hot' }" @click="switchSort('hot')">🔥 最热</button>
+        <button class="sort-btn sort-order-btn" :title="order === 'desc' ? '当前：降序 ▼  点击切换为升序' : '当前：升序 ▲  点击切换为降序'" @click="toggleOrder">
+          {{ order === 'desc' ? '▼ 降序' : '▲ 升序' }}
+        </button>
+      </div>
+      <select v-if="cuisines.length > 0" class="cuisine-filter" v-model="cuisineFilter" @change="fetchRecipes">
+        <option value="">全部菜系</option>
+        <option v-for="c in cuisines" :key="c" :value="c">{{ c }}</option>
+      </select>
+    </div>
+
     <!-- 加载中 -->
     <div v-if="loading" class="text-center" style="padding: 60px 0;">
       <p>加载中...</p>
@@ -14,7 +29,7 @@
         class="card square-card"
         v-for="r in recipes"
         :key="r.id"
-        @click="$router.push(`/square/${r.id}`)"
+        @click="goDetail(r.id)"
       >
         <div class="square-img">
           <img v-if="r.image_url" :src="r.image_url" :alt="r.name" />
@@ -43,16 +58,43 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getRecipes } from '../api/public'
 
+const router = useRouter()
 const recipes = ref([])
 const loading = ref(true)
+const sortBy = ref('time')
+const order = ref('desc')
+const cuisineFilter = ref('')
+const cuisines = ref([])
+
+function goDetail(id) {
+  router.push('/square/' + id)
+}
+
+function switchSort(by) {
+  sortBy.value = by
+  fetchRecipes()
+}
+
+function toggleOrder() {
+  order.value = order.value === 'desc' ? 'asc' : 'desc'
+  fetchRecipes()
+}
 
 async function fetchRecipes() {
   loading.value = true
   try {
-    const res = await getRecipes()
+    const params = { sort_by: sortBy.value, order: order.value }
+    if (cuisineFilter.value) params.cuisine = cuisineFilter.value
+    const res = await getRecipes(1, 12, params)
     recipes.value = res.items || []
+    // 从已有数据中提取菜系列表
+    if (cuisines.value.length === 0 && recipes.value.length > 0) {
+      const set = new Set(recipes.value.map(r => r.cuisine).filter(Boolean))
+      cuisines.value = [...set]
+    }
   } catch (e) {
     console.error('加载食谱列表失败:', e)
   } finally {
@@ -65,6 +107,50 @@ onMounted(fetchRecipes)
 
 <style scoped>
 .mb-lg { margin-bottom: var(--spacing-lg); }
+.square-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+.sort-btns {
+  display: flex;
+  gap: 4px;
+}
+.sort-btn {
+  padding: 4px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-card);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--color-text-muted);
+}
+.sort-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.sort-btn.active {
+  border-color: var(--color-primary);
+  background: rgba(217, 161, 91, 0.08);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.sort-order-btn {
+  margin-left: 4px;
+  border-style: dashed;
+  font-size: 11px;
+  padding: 4px 10px;
+}
+.cuisine-filter {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  background: var(--color-bg-card);
+  color: var(--color-text);
+  cursor: pointer;
+}
 .square-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

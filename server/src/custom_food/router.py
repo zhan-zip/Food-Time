@@ -1,6 +1,6 @@
 """自定义食物模块 - API 路由（P2：DIY 烹饪建议 + 保存 + 我的菜谱）"""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
@@ -234,7 +234,7 @@ async def save_recipe(
         food_id=food.id,
         cooking_steps=body.cooking_steps if body.cooking_steps else [],
         is_published=body.publish_to_square,
-        publish_status="approved" if body.publish_to_square else "pending",
+        publish_status="pending",  # 发布到广场需管理员审核
     )
     db.add(recipe)
     await db.flush()
@@ -298,3 +298,46 @@ async def my_recipes(
         })
 
     return {"items": items, "total": len(items)}
+
+
+# ============================================================
+# PUT /api/custom/{recipe_id}/publish — 将已保存食谱发布到广场
+# ============================================================
+@router.put("/{recipe_id}/publish")
+async def publish_to_square(
+    recipe_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """将个人菜谱发布到广场（需审核）"""
+    recipe_result = await db.execute(
+        select(CustomRecipe).where(
+            CustomRecipe.id == recipe_id,
+            CustomRecipe.user_id == current_user.id,
+        )
+    )
+    recipe = recipe_result.scalar_one_or_none()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="食谱不存在")
+
+    if recipe.is_published:
+        return {"success": True, "message": "已发布过，无需重复发布"}
+
+    # 更新发布状态
+    recipe.is_published = True
+    recipe.publish_status = "pending"
+
+    # 同步更新 Food 的公开标志
+    food_result = await db.execute(select(Food).where(Food.id == recipe.food_id))
+    food = food_result.scalar_one_or_none()
+    if food:
+        food.is_public = True
+
+    await db.flush()
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": "已提交审核，审核通过后将展示在美食广场",
+        "recipe_id": recipe.id,
+    }

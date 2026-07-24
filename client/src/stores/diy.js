@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getDIYIngredients, suggestRecipe, saveRecipe, getMyRecipes } from '@/api/diy'
+import { getDIYIngredients, suggestRecipe, saveRecipe, getMyRecipes, publishRecipe } from '@/api/diy'
 
 export const useDIYStore = defineStore('diy', () => {
   // ---- 食材数据 ----
@@ -159,11 +159,28 @@ export const useDIYStore = defineStore('diy', () => {
         publish_to_square: publishToSquare,
       })
       lastSavedRecipe.value = res
-      showSaveDialog.value = false
-      stage.value = 'done'
+      if (publishToSquare) {
+        // 直接发布到广场 → 关闭弹窗，显示完成
+        showSaveDialog.value = false
+        stage.value = 'done'
+      }
+      // 未发布时，不关闭弹窗，让 SaveDialog step 2 来引导
       return res
     } catch (e) {
       return { success: false, message: e?.response?.data?.detail || '保存失败' }
+    }
+  }
+
+  async function doPublishToSquare() {
+    if (!lastSavedRecipe.value?.id) {
+      return { success: false, message: '没有可发布的菜谱' }
+    }
+    try {
+      const res = await publishRecipe(lastSavedRecipe.value.id)
+      lastSavedRecipe.value.published = true
+      return res
+    } catch (e) {
+      return { success: false, message: e?.message || '发布失败' }
     }
   }
 
@@ -189,6 +206,6 @@ export const useDIYStore = defineStore('diy', () => {
     addToPlate, removeFromPlate, clearPlate,
     loadIngredients, fetchSuggestion,
     startCooking, skipAnimation, onAnimationDone,
-    openSaveDialog, doSave, loadMyRecipes,
+    openSaveDialog, doSave, doPublishToSquare, loadMyRecipes,
   }
 })

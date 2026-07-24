@@ -38,7 +38,10 @@
         </div>
       </div>
       <p v-if="aiSuggestion.nutrition_tip" class="ai-tip text-sm">💡 {{ aiSuggestion.nutrition_tip }}</p>
-      <p class="nutrition-source text-xs text-muted">营养数据来源：中国食物成分表（第六版）- 基于食材加权估算</p>
+      <div class="nutrition-disclaimer">
+        <p class="nutrition-source">📊 营养数据来源：中国食物成分表（第六版），基于食材加权估算</p>
+        <p class="nutrition-warning">⚠️ AI 烹饪建议仅供参考，非医疗诊断结果。具体热量因烹饪方式和食材用量而异，请结合实际情况判断。</p>
+      </div>
     </div>
 
     <!-- 错误 -->
@@ -71,27 +74,41 @@
     <div v-if="showAnimation" class="animation-area">
       <!-- 炒锅动画 -->
       <div v-if="cookingMethod === 'wok'" class="anim-wok">
-        <span class="pot-emoji">🍳</span>
-        <div class="flame-container">
-          <span v-for="i in 8" :key="i" class="flame-particle" :style="{ animationDelay: (i * 0.15) + 's' }"></span>
+        <div class="wok-scene">
+          <span class="pot-emoji">🍳</span>
+          <div class="food-shake">
+            <span class="food-piece" v-for="i in 5" :key="'f'+i" :style="{ animationDelay: (i * 0.2) + 's' }">🫑</span>
+          </div>
+          <div class="flame-layer">
+            <span v-for="i in 12" :key="'fl'+i" class="flame-particle" :style="flameStyle(i)"></span>
+          </div>
         </div>
-        <p class="anim-hint">大火翻炒中...</p>
+        <p class="anim-hint">🔥 大火翻炒中...</p>
       </div>
+
       <!-- 空气炸锅动画 -->
       <div v-if="cookingMethod === 'air_fryer'" class="anim-airfryer">
-        <span class="pot-emoji">🔥</span>
-        <div class="heat-waves">
-          <span v-for="i in 3" :key="i" class="heat-wave" :style="{ animationDelay: (i * 0.4) + 's' }"></span>
+        <div class="airfryer-scene">
+          <span class="pot-emoji">🔥</span>
+          <div class="air-circulation">
+            <span v-for="i in 8" :key="'ac'+i" class="air-dot" :style="{ animationDelay: (i * 0.25) + 's' }"></span>
+          </div>
+          <div class="heat-layer">
+            <span v-for="i in 5" :key="'hw'+i" class="heat-wave" :style="{ animationDelay: (i * 0.35) + 's', left: (15 + i * 14) + '%' }"></span>
+          </div>
         </div>
-        <p class="anim-hint">循环热风中...</p>
+        <p class="anim-hint">🌪️ 循环热风中...</p>
       </div>
+
       <!-- 蒸锅动画 -->
       <div v-if="cookingMethod === 'steamer'" class="anim-steamer">
-        <span class="pot-emoji">♨️</span>
-        <div class="steam-container">
-          <span v-for="i in 6" :key="i" class="steam-particle" :style="{ left: (20 + i * 10) + '%', animationDelay: (i * 0.3) + 's' }"></span>
+        <div class="steamer-scene">
+          <span class="pot-emoji">♨️</span>
+          <div class="steam-layer">
+            <span v-for="i in 12" :key="'st'+i" class="steam-particle" :style="steamStyle(i)"></span>
+          </div>
         </div>
-        <p class="anim-hint">蒸汽烹饪中...</p>
+        <p class="anim-hint">💨 蒸汽烹饪中...</p>
       </div>
 
       <button class="btn btn-outline btn-sm skip-btn" @click="$emit('skip-animation')">跳过动画 → 保存</button>
@@ -113,6 +130,36 @@ defineProps({
 })
 
 defineEmits(['suggest', 'cook', 'skip', 'select-method', 'skip-animation'])
+
+// 火焰粒子随机化
+function flameStyle(i) {
+  const left = 30 + (i % 6) * 8 + Math.random() * 4
+  const delay = i * 0.12 + Math.random() * 0.2
+  const hue = 15 + Math.random() * 25 // 橙红到金黄
+  const size = 10 + Math.random() * 12
+  return {
+    left: left + '%',
+    animationDelay: delay + 's',
+    background: `linear-gradient(to top, hsl(${hue}, 90%, 50%), hsl(${hue + 15}, 100%, 60%), transparent)`,
+    width: size + 'px',
+    height: (size * 1.5 + 8) + 'px',
+  }
+}
+
+// 蒸汽粒子随机化
+function steamStyle(i) {
+  const left = 15 + (i % 8) * 9 + Math.random() * 5
+  const delay = i * 0.25 + Math.random() * 0.3
+  const size = 6 + Math.random() * 10
+  const drift = (Math.random() - 0.5) * 30
+  return {
+    left: left + '%',
+    animationDelay: delay + 's',
+    width: size + 'px',
+    height: size + 'px',
+    '--drift': drift + 'px',
+  }
+}
 </script>
 
 <style scoped>
@@ -131,7 +178,23 @@ defineEmits(['suggest', 'cook', 'skip', 'select-method', 'skip-animation'])
 .ai-step { display: flex; gap: 8px; font-size: var(--font-size-sm); line-height: 1.5; }
 .step-num { width: 20px; height: 20px; border-radius: 50%; background: var(--color-primary); color: white; text-align: center; font-size: 11px; line-height: 20px; flex-shrink: 0; }
 .ai-tip { color: var(--color-primary-dark); margin-bottom: 4px; }
-.nutrition-source { font-style: italic; }
+.nutrition-disclaimer {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(217, 161, 91, 0.06);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.nutrition-source {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+.nutrition-warning {
+  font-size: 11px;
+  color: #b8860b;
+  line-height: 1.4;
+}
 .suggest-actions { display: flex; gap: 8px; margin-top: var(--spacing-md); }
 .suggest-actions .btn { flex: 1; }
 
@@ -146,48 +209,92 @@ defineEmits(['suggest', 'cook', 'skip', 'select-method', 'skip-animation'])
 .method-desc { display: block; font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
 
 /* 动画区 */
-.animation-area { text-align: center; padding: 20px 0; position: relative; min-height: 120px; }
-.pot-emoji { font-size: 48px; display: block; margin-bottom: 8px; }
-.anim-hint { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: 8px; }
+.animation-area { text-align: center; padding: 24px 0; position: relative; min-height: 160px; }
 
-/* 火焰 */
-.flame-container { position: relative; height: 30px; }
+/* ===== 炒锅动画 ===== */
+.wok-scene { position: relative; display: inline-flex; flex-direction: column; align-items: center; }
+.wok-scene .pot-emoji { font-size: 48px; z-index: 2; }
+.food-shake { position: absolute; top: -10px; display: flex; gap: 4px; z-index: 3; }
+.food-piece {
+  font-size: 16px;
+  animation: foodBounce 0.6s ease-in-out infinite alternate;
+}
+@keyframes foodBounce {
+  0% { transform: translateY(0) rotate(0deg); }
+  100% { transform: translateY(-8px) rotate(15deg); }
+}
+
+.flame-layer { position: relative; width: 120px; height: 50px; margin-top: -8px; }
 .flame-particle {
-  position: absolute; bottom: 0; width: 14px; height: 20px;
-  background: linear-gradient(to top, #e74c3c, #f39c12, transparent);
+  position: absolute; bottom: 0;
   border-radius: 50% 50% 20% 20%;
-  animation: flameDance 0.7s ease-in-out infinite alternate;
-  left: calc(50% - 7px);
+  animation: flameDance 0.8s ease-in-out infinite alternate;
+  transform-origin: center bottom;
 }
 @keyframes flameDance {
-  0% { transform: translateY(0) scale(1, 0.8); opacity: 0.9; }
-  100% { transform: translateY(-14px) scale(0.6, 1.2); opacity: 0.4; }
+  0%   { transform: translateY(0) scale(1, 0.7) rotate(-3deg); opacity: 0.9; }
+  40%  { transform: translateY(-18px) scale(0.7, 1.3) rotate(2deg); opacity: 0.7; }
+  70%  { transform: translateY(-8px) scale(0.5, 1.1) rotate(-1deg); opacity: 0.5; }
+  100% { transform: translateY(-24px) scale(0.3, 1.5) rotate(0deg); opacity: 0.2; }
 }
 
-/* 热风波纹 */
-.heat-waves { position: relative; height: 30px; }
+/* ===== 空气炸锅动画 ===== */
+.airfryer-scene { position: relative; display: inline-flex; flex-direction: column; align-items: center; }
+.airfryer-scene .pot-emoji { font-size: 48px; z-index: 2; }
+
+.air-circulation {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 100px; height: 60px;
+}
+.air-dot {
+  position: absolute;
+  width: 4px; height: 4px;
+  background: rgba(230, 126, 34, 0.6);
+  border-radius: 50%;
+  animation: airCirculate 1.8s linear infinite;
+}
+.air-dot:nth-child(odd) { background: rgba(241, 196, 15, 0.5); }
+@keyframes airCirculate {
+  0%   { transform: translate(0, 30px) scale(0.5); opacity: 0; }
+  25%  { transform: translate(40px, 0) scale(1); opacity: 0.8; }
+  50%  { transform: translate(0, -20px) scale(1.2); opacity: 1; }
+  75%  { transform: translate(-40px, 0) scale(1); opacity: 0.8; }
+  100% { transform: translate(0, 30px) scale(0.5); opacity: 0; }
+}
+
+.heat-layer { position: relative; width: 100px; height: 40px; margin-top: -6px; }
 .heat-wave {
-  position: absolute; width: 40px; height: 2px;
-  background: linear-gradient(to right, transparent, #e67e22, transparent);
-  left: calc(50% - 20px);
-  animation: heatRise 1.2s ease-out infinite;
+  position: absolute; bottom: 0;
+  width: 3px; height: 28px;
+  background: linear-gradient(to top, #e67e22, #f39c12, transparent);
+  border-radius: 2px;
+  animation: heatPulse 1.5s ease-out infinite;
 }
-@keyframes heatRise {
-  0% { transform: translateY(10px); opacity: 0.8; }
-  100% { transform: translateY(-20px); opacity: 0; }
+@keyframes heatPulse {
+  0%   { transform: translateY(5px) scaleY(0.3); opacity: 0.9; }
+  50%  { transform: translateY(-15px) scaleY(1.2); opacity: 0.6; }
+  100% { transform: translateY(-35px) scaleY(0.5); opacity: 0; }
 }
 
-/* 蒸汽 */
-.steam-container { position: relative; height: 60px; }
+/* ===== 蒸锅动画 ===== */
+.steamer-scene { position: relative; display: inline-flex; flex-direction: column; align-items: center; }
+.steamer-scene .pot-emoji { font-size: 48px; z-index: 2; }
+
+.steam-layer { position: relative; width: 140px; height: 70px; margin-top: -10px; }
 .steam-particle {
-  position: absolute; bottom: 0; width: 8px; height: 8px;
-  background: rgba(255,255,255,0.7); border-radius: 50%;
-  animation: steamRise 2s ease-out infinite;
+  position: absolute; bottom: 0;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  animation: steamRise 2.5s ease-out infinite;
+  filter: blur(1px);
 }
 @keyframes steamRise {
-  0% { transform: translateY(0) scale(0.5); opacity: 0.6; }
-  100% { transform: translateY(-50px) scale(1.8); opacity: 0; }
+  0%   { transform: translateY(0) translateX(0) scale(0.3); opacity: 0.7; }
+  30%  { transform: translateY(-20px) translateX(calc(var(--drift) * 0.5)) scale(1); opacity: 0.8; }
+  60%  { transform: translateY(-45px) translateX(var(--drift)) scale(1.8); opacity: 0.4; }
+  100% { transform: translateY(-70px) translateX(calc(var(--drift) * 1.5)) scale(2.5); opacity: 0; }
 }
 
-.skip-btn { margin-top: 12px; font-size: 11px; }
+.anim-hint { font-size: var(--font-size-sm); color: var(--color-primary-dark); margin-top: 12px; font-weight: 500; }
+.skip-btn { margin-top: 16px; font-size: 11px; }
 </style>

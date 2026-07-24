@@ -69,7 +69,7 @@ Food-Time/
 │       │       ├── PlateSection.vue      ←   备菜盘（食材排列+弹入动画）
 │       │       ├── SeasoningRack.vue     ←   调料台（横滚抽屉）
 │       │       ├── CookingPanel.vue      ←   烹饪面板（方式选择+AI建议展示）
-│       │       └── SaveDialog.vue        ←   保存弹窗（菜名+描述+发布到广场）
+│       │       └── SaveDialog.vue        ←   保存弹窗（菜名+描述+烹饪方式可选+发布到广场）
 │       ├── stores/
 │       │   └── diy.js                    ← DIY 厨房状态管理（Pinia）
 │       ├── assets/main.css              ← 暖色调全局样式
@@ -82,7 +82,8 @@ Food-Time/
 │           ├── Expense.vue              ← 记账（手动录入+OCR识图+统计图表）
 │           ├── Assistant.vue            ← AI助手（SSE流式+快捷决策面板）
 │           ├── About.vue                ← 关于我（个人信息+营养分析图表）
-│           ├── Admin.vue                ← 管理后台（数据统计）
+│           ├── Admin.vue                ← 管理后台（数据统计+食谱审核+用户管理）
+│           ├── AdminLogin.vue           ← 管理员独立登录页
 │           ├── Login.vue                ← 登录
 │           └── Register.vue             ← 注册
 │
@@ -892,7 +893,7 @@ class Comment(Base):
 | expense | `/api/expense/*` | ✅ 完整 | 手动录入 + OCR(后端代理Qwen VL) + 统计数据 |
 | public_food | `/api/public/*` | ✅ 完整 | 广场列表 + 详情 + 评论 + 收藏 + 食谱保存 |
 | custom_food | `/api/custom/*` | ✅ 完整 | AI建议 + 保存菜谱 + 我的菜谱列表 + 发布到广场 |
-| admin | `/api/admin/*` | ⚠️ 基础 | 仅有基础统计端点 |
+| admin | `/api/admin/*` | ✅ 完整 | 统计数据 + 审核通过/拒绝 + 用户管理(封禁/解封/升降级/删除) |
 
 #### 前端
 
@@ -906,8 +907,9 @@ class Comment(Base):
 | 记账 | `Expense.vue` | ✅ | 输入账单 + OCR 识别 + 饼图/折线图 |
 | AI 助手 | `Assistant.vue` | ✅ | SSE 流式 + 快捷决策面板 + 多模态 |
 | 关于我 | `About.vue` | ✅ | 个人信息 + 偏好 + 7/30天营养Canvas图表 |
-| 管理后台 | `Admin.vue` | ✅ | 基础统计 |
+| 管理员后台 | `Admin.vue` | ✅ | 数据统计 + 食谱审核 + 用户管理（封禁/升降级/删除） |
 | 登录/注册 | `Login.vue`, `Register.vue` | ✅ | 表单校验 + SMTP验证 + 60s倒计时 |
+| 管理员登录 | `AdminLogin.vue` | ✅ | 独立管理员登录页 |
 
 ### 三、P2 进度（2026-07-24）
 
@@ -915,10 +917,12 @@ class Comment(Base):
 
 | 编号 | 内容 | 状态 |
 |------|------|------|
-| P2-1 | DIY 烹饪：[详见第二十一节](#二十一p2-1-diy-烹饪核心设计方案) | 已完成（冰箱+岛台+飞入动画+AI建议+保存发布） |
-| P2-2 | 广场排序（热度/时间）+ 管理员审核 | 待完成 |
+| P2-1 | DIY 烹饪：[详见第二十一节](#二十一p2-1-diy-烹饪核心设计方案) | ✅ 已完成 |
+| P2-1 | 烹饪动画增强：火焰/蒸汽/热风粒子特效 | ✅ 已完成 |
+| P2-2 | 广场排序（热度/时间 + 正序/逆序切换）+ 菜系筛选 + 管理员审核 | ✅ 已完成 |
 | P2-3 | 食物决策辅助：属性筛选 + 随机转盘(CSS动画) + AI推荐 | 待完成 |
-| P3 | PWA 离线缓存 + 管理后台完善(用户管理/食谱审核) + 赛事文档 + 全面美化 | — |
+| P2 | 保存菜谱烹饪方式可选 + 提交广场入口完善 + 管理员登录安全加固 | ✅ 已完成（见第二十三节） |
+| P3 | PWA 离线缓存 + 赛事文档 + 全面美化 | — |
 
 ### 四、新增需求记录（未实现）
 
@@ -1335,8 +1339,64 @@ card.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%) scale(
 | 错误信息处理 | 始终在边界层（axios 拦截器）对错误做类型序列化，确保下游拿到的是字符串 |
 
 ---
-
 **最后更新：** 2026-07-24（P2-1 DIY 烹饪功能完成 — 双开门冰箱 + 飞入动画 + AI建议 + 保存发布）  
 **项目路径：** `d:\Desktop\test\TreaWork\Food-Time\`  
 **GitHub**：https://github.com/zhan-zip/Food-Time  
 **开发周期：** 2026年7月—10月（3个月），P0+P1 已完成，P2-1 已完成，P2-2/P2-3 待推进
+
+
+---
+## 二十三、2026-07-24 P2 Bug 修复与功能完善
+
+### 一、修复清单
+
+| # | 问题 | 根因 | 修复方案 |
+|---|------|------|----------|
+| 1 | 保存菜谱时烹饪方式只能选炒锅 | `diy.js` `fetchSuggestion()` 中 `cookingMethod` 赋值在 `if (res.ai_suggestion)` 内，数据库匹配路径返回 `ai_suggestion: null` | SaveDialog 烹饪方式从只读 `<input>` 改为 `<select>` 下拉框，支持炒锅/空气炸锅/蒸锅三选一 |
+| 2 | DIY 食谱后无提交广场入口 | `doSave()` 成功后立即关闭弹窗，导致 SaveDialog step 2 一闪而过；`done` 状态也缺少入口 | 后端新增 `PUT /api/custom/{id}/publish` 避免重复创建；前端 done 状态新增"📤 发布到广场"按钮；弹窗 step 2 正确展示 |
+| 3a | 管理员登录安全 | 前端路由守卫仅检查 token，任何登录用户都能看到 `/admin` 页面 | 新建 `AdminLogin.vue` 独立管理员登录页；路由守卫检查 `is_admin`，非管理员跳 `/admin/login` |
+| 3b | 后台统计数据显示假数据 | `admin_stats` 硬编码返回 `{users:0, foods:0, recipes:0}` | 改为查询 `User`/`Food`/`CustomRecipe` 真实数据库数据 |
+| 3c | 缺少用户管理功能 | 管理后台用户管理为 P3 占位符 | 后端新增 `GET/PUT/DELETE /api/admin/users`；前端新增用户管理 Tab — 封禁/解封/设为管理员/取消管理员/删除 |
+| 4 | 排序只有降序无正序/逆序 | 前端无 `order` 状态；后端无 `order` 查询参数 | 后端新增 `order` 参数（desc/asc）；前端新增"▼降序/▲升序"切换按钮 |
+
+### 二、文件改动清单
+
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| `client/src/components/diy/SaveDialog.vue` | 修改 | 烹饪方式从只读改为下拉选择；新增 `cookingMethods`/`currentMethod` props + `updateMethod` emit |
+| `client/src/stores/diy.js` | 修改 | `doSave` 不关闭弹窗；新增 `doPublishToSquare` 方法 |
+| `client/src/views/DIY.vue` | 修改 | done 状态新增"发布到广场"按钮；SaveDialog 传递新 props |
+| `client/src/views/AdminLogin.vue` | **新增** | 独立管理员登录页，验证 `is_admin` 后放行 |
+| `client/src/views/Admin.vue` | 修改 | 新增用户管理 Tab（封禁/解封/升降级/删除）；退出登录按钮；真实统计数据 |
+| `client/src/router/index.js` | 修改 | 新增 `/admin/login` 路由；路由守卫检查 `requireAdmin` meta |
+| `client/src/api/admin.js` | 修改 | 新增 `getStats`/`getUsers`/`updateUser`/`deleteUser`；修正 API 路径前缀 |
+| `client/src/api/diy.js` | 修改 | 新增 `publishRecipe` API |
+| `client/src/views/Square.vue` | 修改 | 新增 `order` 状态 + "▼降序/▲升序"切换按钮 |
+| `server/src/custom_food/router.py` | 修改 | 新增 `PUT /api/custom/{recipe_id}/publish` 发布端点 |
+| `server/src/admin/router.py` | 修改 | `admin_stats` 改为真实查询；新增用户管理 CRUD（`GET/PUT/DELETE /api/admin/users`） |
+| `server/src/public_food/router.py` | 修改 | 新增 `order` 参数（desc/asc）支持正序/逆序排序 |
+
+### 三、涉及的 API 端点
+
+| 方法 | 端点 | 用途 |
+|------|------|------|
+| PUT | `/api/custom/{id}/publish` | 将已保存菜谱发布到广场（审核中） |
+| GET | `/api/admin/users` | 分页获取用户列表 |
+| PUT | `/api/admin/users/{id}` | 更新用户（封禁/解封、升级/降级管理员） |
+| DELETE | `/api/admin/users/{id}` | 删除用户 |
+| GET | `/api/admin/stats` | 平台数据统计（真实数据） |
+| GET | `/api/public/recipes?order=asc\|desc` | 新增正序/逆序排序 |
+
+### 四、测试验证
+
+- ✅ 烹饪方式下拉可选炒锅/空气炸锅/蒸锅
+- ✅ 保存后弹窗询问"是否发布到广场"，done 状态也有备用入口
+- ✅ 访问 `/admin` 自动跳 `/admin/login`，普通用户即使登录也无法访问
+- ✅ 管理员 admin@food-time.com 登录后可查看真实统计数据、审核食谱、管理用户
+- ✅ 排序新增"▼降序/▲升序"切换，列表按相反方向重新排序
+- ✅ `2259016269@qq.com` 在用户管理 Tab 中正确显示
+
+---
+**最后更新：** 2026-07-24（P2 修复与完善完成：烹饪方式可选 + 发布入口 + 管理员安全 + 排序切换）  
+**项目路径：** `d:\Desktop\test\TreaWork\Food-Time\`  
+**GitHub**：https://github.com/zhan-zip/Food-Time

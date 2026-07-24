@@ -1,8 +1,8 @@
 /** 美食广场 API */
 import request from './request'
 
-export function getRecipes(page = 1, pageSize = 12) {
-  return request.get('/public/recipes', { params: { page, page_size: pageSize } })
+export function getRecipes(page = 1, pageSize = 12, extraParams = {}) {
+  return request.get('/public/recipes', { params: { page, page_size: pageSize, ...extraParams } })
 }
 
 export function getRecipeDetail(id) {
