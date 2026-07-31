@@ -94,11 +94,11 @@
           </div>
           <p class="text-sm" style="margin-bottom: 12px">本月合计：<strong>¥{{ stats.total_month }}</strong></p>
 
-          <!-- 饼图 -->
-          <canvas ref="pieCanvas" width="280" height="200" class="chart-canvas"></canvas>
+          <!-- ECharts 饼图 -->
+          <div ref="pieDom" style="width:100%;height:260px"></div>
 
-          <!-- 折线图 -->
-          <canvas ref="lineCanvas" width="560" height="200" class="chart-canvas" style="margin-top: 16px"></canvas>
+          <!-- ECharts 折线图 -->
+          <div ref="lineDom" style="width:100%;height:260px; margin-top:16px"></div>
         </div>
       </div>
     </div>
@@ -106,7 +106,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import * as echarts from 'echarts'
 import { getExpenseRecords, createExpenseRecord, deleteExpenseRecord, getExpenseStats, ocrExpense } from '@/api/expense'
 
 // 表单
@@ -145,12 +146,21 @@ const periods = [
   { value: 'month', label: '本月' },
 ]
 const stats = ref({ total_month: 0, categories: {}, daily_trend: [] })
-const pieCanvas = ref(null)
-const lineCanvas = ref(null)
+const pieDom = ref(null)
+const lineDom = ref(null)
+let pieChart = null
+let lineChart = null
 
 onMounted(() => {
   loadRecords()
   loadStats('month')
+  window.addEventListener('resize', onResize)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize)
+  pieChart?.dispose()
+  lineChart?.dispose()
 })
 
 async function submitExpense() {
@@ -198,141 +208,64 @@ async function loadStats(period) {
     const res = await getExpenseStats(period)
     stats.value = res
     await nextTick()
-    drawPieChart()
-    drawLineChart()
+    renderCharts()
   } catch { /* ignore */ }
 }
 
-function drawPieChart() {
-  const canvas = pieCanvas.value
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  const W = canvas.width
-  const H = canvas.height
-  const cx = W / 2
-  const cy = H / 2
-  const r = Math.min(cx, cy) - 16
-
-  ctx.clearRect(0, 0, W, H)
-
-  const entries = Object.entries(stats.value.categories || {})
-  if (!entries.length) {
-    ctx.fillStyle = '#999'
-    ctx.font = '13px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText('暂无数据', cx, cy)
-    return
-  }
-
-  const pieColors = ['#D9A15B', '#52c41a', '#3498db', '#e74c3c', '#9b59b6']
-  let total = entries.reduce((s, [, v]) => s + v.amount, 0)
-  if (total === 0) total = 1
-
-  let startAngle = -Math.PI / 2
-  entries.forEach(([name, val], i) => {
-    const sliceAngle = (val.amount / total) * Math.PI * 2
-    ctx.beginPath()
-    ctx.moveTo(cx, cy)
-    ctx.arc(cx, cy, r, startAngle, startAngle + sliceAngle)
-    ctx.closePath()
-    ctx.fillStyle = pieColors[i % pieColors.length]
-    ctx.fill()
-
-    // 标签
-    const mid = startAngle + sliceAngle / 2
-    const lx = cx + Math.cos(mid) * (r * 0.65)
-    const ly = cy + Math.sin(mid) * (r * 0.65)
-    ctx.fillStyle = '#fff'
-    ctx.font = 'bold 11px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText(name, lx, ly - 4)
-    ctx.fillText('¥' + val.amount, lx, ly + 12)
-
-    startAngle += sliceAngle
-  })
+function onResize() {
+  pieChart?.resize()
+  lineChart?.resize()
 }
 
-function drawLineChart() {
-  const canvas = lineCanvas.value
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  const W = canvas.width
-  const H = canvas.height
-  const pad = { top: 24, right: 20, bottom: 36, left: 54 }
-  const pw = W - pad.left - pad.right
-  const ph = H - pad.top - pad.bottom
+const PIE_COLORS = ['#D9A15B', '#52c41a', '#3498db', '#e74c3c', '#9b59b6']
 
-  ctx.clearRect(0, 0, W, H)
-
-  const points = stats.value.daily_trend || []
-  if (!points.length) {
-    ctx.fillStyle = '#999'
-    ctx.font = '13px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText('暂无数据', W / 2, H / 2)
-    return
+function renderCharts() {
+  // 饼图
+  const pieEl = pieDom.value
+  if (pieEl) {
+    if (!pieChart) pieChart = echarts.init(pieEl)
+    const entries = Object.entries(stats.value.categories || {})
+    pieChart.setOption({
+      color: PIE_COLORS,
+      tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '50%'],
+        label: { show: true, formatter: '{b}\n¥{c}', fontSize: 12 },
+        data: entries.map(([name, val]) => ({ name, value: val.amount })),
+      }],
+    }, true)
   }
 
-  let maxVal = Math.max(...points.map(p => p.amount), 1)
-  maxVal = Math.ceil(maxVal / 50) * 50 || 50
-
-  // 网格线
-  ctx.strokeStyle = '#eee'
-  ctx.lineWidth = 1
-  ctx.font = '10px sans-serif'
-  ctx.fillStyle = '#999'
-  ctx.textAlign = 'right'
-  for (let i = 0; i <= 4; i++) {
-    const y = pad.top + ph * (1 - i / 4)
-    ctx.beginPath()
-    ctx.moveTo(pad.left, y)
-    ctx.lineTo(W - pad.right, y)
-    ctx.stroke()
-    ctx.fillText(Math.round(maxVal * i / 4), pad.left - 8, y + 4)
+  // 折线图
+  const lineEl = lineDom.value
+  if (lineEl) {
+    if (!lineChart) lineChart = echarts.init(lineEl)
+    const points = stats.value.daily_trend || []
+    lineChart.setOption({
+      color: ['#D9A15B'],
+      tooltip: { trigger: 'axis' },
+      grid: { left: 50, right: 20, top: 20, bottom: 30 },
+      xAxis: {
+        type: 'category',
+        data: points.map(p => p.date.slice(5)),
+        axisLabel: { fontSize: 10 },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { fontSize: 10, formatter: '¥{value}' },
+      },
+      series: [{
+        type: 'line',
+        data: points.map(p => p.amount),
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        label: { show: true, formatter: '¥{c}', fontSize: 10, position: 'top' },
+      }],
+    }, true)
   }
-
-  // 折线
-  ctx.strokeStyle = '#D9A15B'
-  ctx.lineWidth = 2.5
-  ctx.lineJoin = 'round'
-  ctx.beginPath()
-
-  const stepX = points.length > 1 ? pw / (points.length - 1) : pw / 2
-  const px = points.length === 1 ? pad.left + pw / 2 : pad.left
-
-  points.forEach((p, i) => {
-    const x = px + stepX * i
-    const y = pad.top + ph - (p.amount / maxVal) * ph
-    if (i === 0) ctx.moveTo(x, y)
-    else ctx.lineTo(x, y)
-  })
-  ctx.stroke()
-
-  // 数据点
-  ctx.fillStyle = '#D9A15B'
-  points.forEach((p, i) => {
-    const x = px + stepX * i
-    const y = pad.top + ph - (p.amount / maxVal) * ph
-    ctx.beginPath()
-    ctx.arc(x, y, 4, 0, Math.PI * 2)
-    ctx.fill()
-
-    // 金额标签
-    ctx.fillStyle = '#333'
-    ctx.font = '10px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText('¥' + p.amount, x, y - 10)
-    ctx.fillStyle = '#D9A15B'
-  })
-
-  // 日期标签
-  ctx.fillStyle = '#999'
-  ctx.font = '10px sans-serif'
-  ctx.textAlign = 'center'
-  points.forEach((p, i) => {
-    const x = px + stepX * i
-    ctx.fillText(p.date.slice(5), x, H - pad.bottom + 22)
-  })
 }
 
 async function onOcrUpload(e) {
@@ -423,15 +356,6 @@ async function onOcrUpload(e) {
   padding: 0 4px;
 }
 .btn-close:hover { color: #e74c3c; }
-
-/* 图表 */
-.chart-canvas {
-  width: 100%;
-  max-width: 560px;
-  height: auto;
-  display: block;
-  margin: 0 auto;
-}
 
 /* OCR */
 .ocr-zone {
