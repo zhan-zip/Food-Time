@@ -94,6 +94,12 @@ export const useDIYStore = defineStore('diy', () => {
 
   async function fetchSuggestion() {
     if (!canSuggest.value) return
+    // 护栏（新增需求 N5）：最少 3 种主料才能发起 AI 建议，不足则提示并保留选择阶段
+    if (ingredientNames.value.length < 3) {
+      suggestError.value = '至少选 3 种主料才能开火哦~'
+      stage.value = 'selecting'
+      return
+    }
     stage.value = 'suggesting'
     suggestError.value = ''
     matchedRecipes.value = []
