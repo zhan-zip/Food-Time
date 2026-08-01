@@ -20,6 +20,7 @@
           <span v-if="pendingTotal > 0" class="tab-badge">{{ pendingTotal }}</span>
         </button>
         <button class="admin-tab" :class="{ active: tab === 'users' }" @click="switchTab('users')">用户管理</button>
+        <button class="admin-tab" :class="{ active: tab === 'deleted' }" @click="switchTab('deleted')">已删除用户</button>
       </div>
 
       <!-- Tab: 数据统计 -->
@@ -169,6 +170,49 @@
           </p>
         </div>
       </div>
+
+      <!-- Tab: 已删除用户 -->
+      <div v-if="tab === 'deleted'">
+        <div v-if="deletedLoading" class="text-center" style="padding: 60px 0;">
+          <p class="text-muted">加载删除记录...</p>
+        </div>
+        <div v-else-if="deletedList.length === 0" class="text-center" style="padding: 60px 0;">
+          <span style="font-size:48px; display:block; margin-bottom:12px">🗑️</span>
+          <p class="text-muted">暂无已删除用户记录</p>
+        </div>
+        <div v-else class="card" style="overflow-x:auto">
+          <table class="user-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>昵称</th>
+                <th>邮箱</th>
+                <th>身份</th>
+                <th>删除时间</th>
+                <th>操作者</th>
+                <th>数据摘要</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="d in deletedList" :key="d.id">
+                <td>{{ d.original_user_id }}</td>
+                <td>{{ d.nickname }}</td>
+                <td>{{ d.email }}</td>
+                <td>
+                  <span v-if="d.is_admin" class="tag tag-danger">管理员</span>
+                  <span v-else class="tag tag-default">普通用户</span>
+                </td>
+                <td class="text-sm text-muted">{{ formatDateTime(d.deleted_at) }}</td>
+                <td class="text-sm text-muted">{{ d.deleted_by }}</td>
+                <td class="text-sm text-muted">饮食{{ d.diet_count }} · 账单{{ d.expense_count }} · 菜谱{{ d.recipe_count }} · 对话{{ d.conversation_count }} · 消费 ¥{{ d.total_expense }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="deletedTotal > deletedList.length" class="text-sm text-muted" style="text-align:center; margin-top:12px">
+            共 {{ deletedTotal }} 条删除记录，已加载 {{ deletedList.length }} 条
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -176,7 +220,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getPendingRecipes, approveRecipe, rejectRecipe, getStats, getUsers, updateUser, deleteUser } from '../api/admin'
+import { getPendingRecipes, approveRecipe, rejectRecipe, getStats, getUsers, updateUser, deleteUser, getDeletedUsers } from '../api/admin'
 
 const router = useRouter()
 const tab = ref('review')
@@ -192,9 +236,19 @@ const usersLoading = ref(false)
 const userList = ref([])
 const usersTotal = ref(0)
 
+// 已删除用户审计
+const deletedLoading = ref(false)
+const deletedList = ref([])
+const deletedTotal = ref(0)
+
 function formatDate(d) {
   if (!d) return ''
   return new Date(d).toLocaleDateString('zh-CN')
+}
+
+function formatDateTime(d) {
+  if (!d) return ''
+  return new Date(d).toLocaleString('zh-CN', { hour12: false })
 }
 
 function handleLogout() {
@@ -327,10 +381,24 @@ async function handleDeleteUser(u) {
   }
 }
 
+async function fetchDeletedUsers() {
+  deletedLoading.value = true
+  try {
+    const res = await getDeletedUsers()
+    deletedList.value = res.items || []
+    deletedTotal.value = res.total || 0
+  } catch (e) {
+    console.error('加载删除记录失败:', e)
+  } finally {
+    deletedLoading.value = false
+  }
+}
+
 function switchTab(t) {
   tab.value = t
   if (t === 'users') fetchUsers()
   if (t === 'stats') fetchStats()
+  if (t === 'deleted') fetchDeletedUsers()
 }
 
 onMounted(() => {

@@ -39,7 +39,7 @@ MySQL 8.0                  ↗ Qwen VL API (账单 OCR + 食物图片识别)
 
 * **后端**：FastAPI 异步框架，8 个功能模块，JWT 认证
 
-* **数据库**：MySQL 8.0，14 张表，utf8mb4
+* **数据库**：MySQL 8.0，15 张表，utf8mb4
 
 * **AI**：DeepSeek chat 对话与工具调用，Qwen VL 视觉识别
 
@@ -164,7 +164,7 @@ python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
 启动后自动完成：
 
-* 建表（14 张表）
+* 建表（15 张表）
 
 * 创建管理员账号（<admin@food-time.com> / admin123）
 
@@ -300,7 +300,7 @@ ADMIN_PASSWORD=admin123
 
 ## 七、数据库设计
 
-### 14 张表
+### 15 张表
 
 | 表名                          | 说明                                    | 状态 |
 | --------------------------- | ------------------------------------- | -- |
@@ -318,6 +318,7 @@ ADMIN_PASSWORD=admin123
 | `likes`                     | 点赞表                                   | ✅  |
 | `favorites`                 | 收藏表                                   | ✅  |
 | `recipe_comments`           | 食谱评论表 (recipe\_id, user\_id, content) | ✅  |
+| `deleted_users`             | 已删除用户审计表（2026-08-01 新增）            | ✅  |
 
 ### 关键设计决策
 
@@ -1797,3 +1798,19 @@ card.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%) scale(
 **覆盖页面**：Expense.vue（OCR）、Admin.vue（用户管理）、Assistant.vue（AI 对话）
 
 **修复说明**：C4 时间戳改时区感知；H9 金额安全解析；H10 删除用户清理关联数据（方案 A）；H1 SSE 错误后补发 done。
+
+---
+
+### 测试 16 — 2026-08-01 删除用户审计记录功能（新功能）
+
+| # | 测试内容 | 方式 | 结果 | 备注 |
+|---|---------|------|------|------|
+| 1 | 后端 — `deleted_users` 表创建 | P2 | ✅ | `init_db` create_all 建新表 |
+| 2 | `delete_user` 生成审计记录（基本信息+数据摘要） | P2 | ✅ | 账单 2 共 55.5 / 饮食 1 / 菜谱 1 / 对话 1 摘要正确 |
+| 3 | `GET /api/admin/deleted-users` 分页接口 | P0 | ✅ | 返回删除记录与数据摘要 |
+| 4 | 前端 Admin.vue 新增"已删除用户"Tab + `vite build` | P1 | ✅ | 表格展示删除记录，构建通过 |
+
+**覆盖模块**：admin（新增 `deleted_users` 表 + `deleted-users` 接口）  
+**覆盖页面**：Admin.vue（新增"已删除用户"Tab）
+
+**功能说明**：删除用户（方案 A）时，将用户基本信息与数据摘要（饮食/账单/菜谱/对话数 + 累计消费）存档到 `deleted_users` 表，后台可通过"已删除用户"Tab 查看审计记录。数据库表从 14 张增至 15 张。

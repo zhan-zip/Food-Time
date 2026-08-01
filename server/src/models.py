@@ -7,6 +7,7 @@ from src.diet.models import DietRecord, UserPreference
 from src.expense.models import ExpenseRecord
 from src.chat.models import Conversation, LongMemory
 from src.public_food.models import Like, Favorite, Comment
+from src.admin.models import DeletedUser
 
 __all__ = [
     "User", "EmailVerification",
@@ -16,4 +17,5 @@ __all__ = [
     "ExpenseRecord",
     "Conversation", "LongMemory",
     "Like", "Favorite", "Comment",
+    "DeletedUser",
 ]

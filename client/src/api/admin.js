@@ -34,3 +34,8 @@ export function updateUser(userId, data) {
 export function deleteUser(userId) {
   return request.delete(`/admin/users/${userId}`)
 }
+
+/** 获取已删除用户审计记录 */
+export function getDeletedUsers(page = 1, pageSize = 20) {
+  return request.get('/admin/deleted-users', { params: { page, page_size: pageSize } })
+}
