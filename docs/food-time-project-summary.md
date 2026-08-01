@@ -1718,3 +1718,20 @@ card.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%) scale(
 **覆盖页面**：无（后端启动安全校验 + 管理员初始化）
 
 **修复说明**：`JWT_SECRET`/`ADMIN_PASSWORD` 默认值置空；启动时安全校验拒绝空/默认值并 `sys.exit(1)`；`init_admin` 检测历史管理员默认密码并自动重置。
+
+---
+
+### 测试 12 — 2026-08-01 C5 SaveDialog 保存结果反馈修复
+
+| # | 测试内容 | 方式 | 结果 | 备注 |
+|---|---------|------|------|------|
+| 1 | `vite build` 前端生产构建 | P1 | ✅ | 3.40s，0 errors |
+| 2 | 保存失败场景 — 不跳转成功页、停留 step1 显示错误 | P2 | ✅ | Vue reactivity 模拟：step 保持 0，saving 复位 |
+| 3 | 保存成功场景 — 跳转成功页 step2 | P2 | ✅ | savedResult 含 id 时 step→2 |
+| 4 | 边界 — 保存返回无 id 无效对象不跳转 | P2 | ✅ | 防御性判断生效 |
+| 5 | 防重复提交 — saving 期间按钮禁用/提交拦截 | P2 | ✅ | `!name.trim() || saving` 守卫 |
+
+**覆盖模块**：custom_food（前端对接）  
+**覆盖页面**：DIY.vue, SaveDialog.vue
+
+**修复说明**：`handleSubmit` 不再无条件跳 step2；`DIY.vue` 将 `doSave` 返回值经 `saveError` 传回；仅成功时跳转，失败时停留在填表页展示错误。

@@ -192,6 +192,7 @@
       :current-method="store.cookingMethod"
       :cooking-methods="store.cookingMethods"
       :saved-result="store.lastSavedRecipe"
+      :save-error="saveError"
       @cancel="store.showSaveDialog = false"
       @save="({ name, description, publishToSquare }) => handleSave(name, description, publishToSquare)"
       @publish="handlePublishFromDialog"
@@ -212,6 +213,7 @@ import SaveDialog from '@/components/diy/SaveDialog.vue'
 
 const store = useDIYStore()
 const plateRef = ref(null)
+const saveError = ref('')
 
 // 首次引导
 const showGuide = ref(false)
@@ -363,7 +365,11 @@ function onIngredientSelect(item, type, e) {
 }
 
 async function handleSave(name, description, publishToSquare) {
-  await store.doSave({ name, description, publishToSquare })
+  saveError.value = ''
+  const res = await store.doSave({ name, description, publishToSquare })
+  if (res?.success === false) {
+    saveError.value = res.message || '保存失败，请重试'
+  }
 }
 
 // 从弹窗中点击"发布到广场"

@@ -45,9 +45,10 @@
                 <option v-for="m in cookingMethods" :key="m.key" :value="m.key">{{ m.label }}</option>
               </select>
             </div>
+            <p v-if="saveError" class="text-sm" style="color:#e74c3c; margin-bottom:12px">{{ saveError }}</p>
             <div class="dialog-actions">
-              <button type="button" class="btn btn-outline" @click="step = 0">上一步</button>
-              <button type="submit" class="btn btn-primary" :disabled="!name.trim()">保存</button>
+              <button type="button" class="btn btn-outline" @click="step = 0" :disabled="saving">上一步</button>
+              <button type="submit" class="btn btn-primary" :disabled="!name.trim() || saving">{{ saving ? '保存中…' : '保存' }}</button>
             </div>
           </form>
         </div>
@@ -75,6 +76,7 @@ const props = defineProps({
   defaultName: { type: String, default: '' },
   methodLabel: { type: String, default: '炒锅' },
   savedResult: { type: Object, default: null },
+  saveError: { type: String, default: '' },
   cookingMethods: { type: Array, default: () => [
     { key: 'wok', label: '炒锅' },
     { key: 'air_fryer', label: '空气炸锅' },
@@ -89,6 +91,7 @@ const step = ref(0)
 const name = ref('')
 const description = ref('')
 const cookingMethod = ref(props.currentMethod)
+const saving = ref(false)
 
 // 重置
 watch(() => props.visible, (v) => {
@@ -97,14 +100,30 @@ watch(() => props.visible, (v) => {
     name.value = props.defaultName || ''
     description.value = ''
     cookingMethod.value = props.currentMethod
+    saving.value = false
   }
 })
 
 function handleSubmit() {
-  if (!name.value.trim()) return
+  if (!name.value.trim() || saving.value) return
+  saving.value = true
   emit('save', { name: name.value.trim(), description: description.value.trim(), publishToSquare: false })
-  step.value = 2
 }
+
+// 保存失败：停留在步骤1，展示错误信息（不跳转成功页）
+watch(() => props.saveError, (err) => {
+  if (err) {
+    saving.value = false
+  }
+})
+
+// 保存成功：仅当保存进行中且结果有效时，才跳转到步骤2
+watch(() => props.savedResult, (res) => {
+  if (saving.value && res && res.success !== false && res.id) {
+    saving.value = false
+    step.value = 2
+  }
+})
 </script>
 
 <style scoped>

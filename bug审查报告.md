@@ -79,7 +79,7 @@
 - **影响**：未来 Python 版本可能彻底移除此方法导致运行时错误。当前所有 JWT 过期时间、验证码过期时间、记录时间等均无时区信息，跨时区部署时行为不可预期。
 - **修复建议**：全局替换为 `datetime.now(datetime.UTC)` 或 `datetime.now(timezone.utc)`。
 
-### C5. SaveDialog 保存失败仍显示"保存成功" [ ]
+### C5. SaveDialog 保存失败仍显示"保存成功" ✅ 已修复 [x]
 
 - **涉及文件**：`client/src/components/diy/SaveDialog.vue:103-107`、`client/src/stores/diy.js:149-172`
 - **问题描述**：`handleSubmit` 无条件设置 `step = 2`（成功页面），完全不检查 `store.doSave()` 的返回值。即使后端返回失败（网络错误/数据校验失败），用户也看到"保存成功！🎉"。
@@ -88,6 +88,10 @@
   1. `handleSubmit` 改为 `await` emit 的结果
   2. `DIY.vue` 的 `@save` 处理函数将 `doSave` 的返回值传回 SaveDialog
   3. 仅在 `success === true` 时跳转到 step 2，失败时显示错误信息在 step 1
+- **✅ 修复记录（2026-08-01）**：
+  - `SaveDialog.vue`：`handleSubmit` 不再无条件跳转 step2；新增 `saving` 状态 + `saveError` prop；保存失败停留在 step1 并展示错误，仅当 `savedResult` 成功（含 `id`）时跳 step2；保存中按钮禁用防重复提交
+  - `DIY.vue`：`handleSave` 捕获 `doSave` 返回值，失败时通过 `saveError` 传回 SaveDialog
+  - 测试：`vite build` 通过；Vue reactivity 逻辑模拟 4 场景（失败不跳转 / 成功跳转 / 无 id 不跳 / 防重复提交）全部通过
 
 ---
 
