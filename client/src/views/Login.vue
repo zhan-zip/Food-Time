@@ -92,7 +92,7 @@ async function handleLogin() {
     localStorage.setItem('user', JSON.stringify(res.user))
     router.push('/')
   } catch (e) {
-    errorMsg.value = e.response?.data?.detail || '登录失败，请重试'
+    errorMsg.value = e.message || '登录失败，请重试'  // 修复 M11：拦截器已转为 Error(message)，e.response 不存在
   } finally {
     loading.value = false
   }

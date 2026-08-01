@@ -1,6 +1,8 @@
 """认证模块 - API 路由"""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from collections import defaultdict, deque
+import time
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
@@ -10,6 +12,20 @@ from src.auth import schemas, service
 from src.auth.models import User
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
+
+# 修复 M13：send-code 简单 IP 限速（内存实现，1 次/分钟/IP，防邮件轰炸）
+_send_code_history: dict[str, deque] = defaultdict(deque)
+
+
+def _check_send_code_rate(ip: str) -> bool:
+    now = time.time()
+    q = _send_code_history[ip]
+    while q and q[0] < now - 60:
+        q.popleft()
+    if len(q) >= 1:
+        return False
+    q.append(now)
+    return True
 
 
 @router.post("/register", response_model=schemas.TokenResponse)
@@ -45,8 +61,16 @@ async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/send-code")
-async def send_code(data: schemas.SendCode, db: AsyncSession = Depends(get_db)):
+async def send_code(
+    data: schemas.SendCode,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     """发送邮箱验证码"""
+    # 修复 M13：IP 限速 1 次/分钟，防邮件轰炸
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_send_code_rate(client_ip):
+        raise HTTPException(status_code=429, detail="发送过于频繁，请 1 分钟后再试")
     code = await service.save_verification_code(db, data.email)
     # 修复 M7：先提交验证码记录，释放 DB 事务，再执行耗时的 SMTP 发送（避免长持有连接/行锁）
     await db.commit()

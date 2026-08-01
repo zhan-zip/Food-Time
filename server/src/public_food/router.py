@@ -43,16 +43,28 @@ async def browse_recipes(
     order_clause = CustomRecipe.created_at.desc() if desc else CustomRecipe.created_at.asc()
 
     offset = (page - 1) * page_size
-    q = (
-        select(CustomRecipe, Food, User)
-        .join(Food, CustomRecipe.food_id == Food.id)
-        .join(User, CustomRecipe.user_id == User.id)
-        .where(and_(*conditions))
-        .order_by(order_clause)
-        .offset(offset)
-        .limit(page_size * 3 if sort_by == "hot" else page_size)
-    )
-    rows = (await db.execute(q)).all()
+
+    if sort_by == "hot":
+        # 修复 M14：热榜需按全局 hot_score 排序，不能依赖 created_at 分页
+        # （旧逻辑先按时间 offset 再内存重排，第 2 页会重复/遗漏）→ 取全部候选内存排序后按页截取
+        q = (
+            select(CustomRecipe, Food, User)
+            .join(Food, CustomRecipe.food_id == Food.id)
+            .join(User, CustomRecipe.user_id == User.id)
+            .where(and_(*conditions))
+        )
+        rows = (await db.execute(q)).all()
+    else:
+        q = (
+            select(CustomRecipe, Food, User)
+            .join(Food, CustomRecipe.food_id == Food.id)
+            .join(User, CustomRecipe.user_id == User.id)
+            .where(and_(*conditions))
+            .order_by(order_clause)
+            .offset(offset)
+            .limit(page_size)
+        )
+        rows = (await db.execute(q)).all()
 
     items = []
     for recipe, food, user in rows:
@@ -77,10 +89,10 @@ async def browse_recipes(
             "created_at": recipe.created_at.isoformat() if recipe.created_at else None,
         })
 
-    # 热度排序
+    # 热度排序（全局 hot_score 排序后按页截取）
     if sort_by == "hot":
         items.sort(key=lambda x: x["hot_score"], reverse=desc)
-        items = items[:page_size]
+        items = items[offset:offset + page_size]
 
     return {"items": items, "total": total, "page": page, "page_size": page_size, "sort_by": sort_by, "cuisine": cuisine, "order": order}
 

@@ -80,7 +80,7 @@
             <span class="food-piece" v-for="i in 5" :key="'f'+i" :style="{ animationDelay: (i * 0.2) + 's' }">🫑</span>
           </div>
           <div class="flame-layer">
-            <span v-for="i in 12" :key="'fl'+i" class="flame-particle" :style="flameStyle(i)"></span>
+            <span v-for="i in 12" :key="'fl'+i" class="flame-particle" :style="flameParticles[i-1]"></span>
           </div>
         </div>
         <p class="anim-hint">🔥 大火翻炒中...</p>
@@ -105,7 +105,7 @@
         <div class="steamer-scene">
           <span class="pot-emoji">♨️</span>
           <div class="steam-layer">
-            <span v-for="i in 12" :key="'st'+i" class="steam-particle" :style="steamStyle(i)"></span>
+            <span v-for="i in 12" :key="'st'+i" class="steam-particle" :style="steamParticles[i-1]"></span>
           </div>
         </div>
         <p class="anim-hint">💨 蒸汽烹饪中...</p>
@@ -160,6 +160,11 @@ function steamStyle(i) {
     '--drift': drift + 'px',
   }
 }
+
+// 修复 M3：预计算火焰/蒸汽粒子样式（组件创建时生成一次），
+// 避免模板渲染时每次调用 Math.random() 导致动画粒子坐标抖动
+const flameParticles = Array.from({ length: 12 }, (_, i) => flameStyle(i + 1))
+const steamParticles = Array.from({ length: 12 }, (_, i) => steamStyle(i + 1))
 </script>
 
 <style scoped>

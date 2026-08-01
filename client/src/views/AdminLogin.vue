@@ -91,7 +91,8 @@ async function handleLogin() {
     router.push('/admin')
   } catch (e) {
     const detail = e?.response?.data?.detail
-    const msg = typeof detail === 'string' ? detail : '登录失败，请重试'
+    // 修复 M11：拦截器已把错误转成 Error(message)，e.response 不存在 → 回退 e.message
+    const msg = typeof detail === 'string' ? detail : (e?.message || '登录失败，请重试')
     errorMsg.value = msg
   } finally {
     loading.value = false

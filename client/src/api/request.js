@@ -23,6 +23,7 @@ request.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
+      localStorage.removeItem('user')  // 修复 M10：同时清除用户缓存，避免路由守卫读到旧 user
       window.location.href = '/login'
     }
     // 提取可读错误信息（detail 可能是字符串、数组或对象）

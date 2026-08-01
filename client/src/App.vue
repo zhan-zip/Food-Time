@@ -145,9 +145,14 @@ async function loadUserInfo() {
     if (res.ok) {
       const data = await res.json()
       userNickname.value = data.nickname || data.email
+    } else {
+      // 修复 M9：token 无效/过期 → 清除登录状态，避免"已登录但无昵称"
+      token.value = null
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
     }
   } catch {
-    // ignore
+    // 网络错误（服务器不可达）不强制登出，避免网络抖动导致掉线
   }
 }
 

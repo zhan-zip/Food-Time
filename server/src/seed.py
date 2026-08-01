@@ -348,4 +348,14 @@ async def seed_recipes(db: AsyncSession):
 
 
 if __name__ == "__main__":
-    asyncio.run(seed_all(async_session()))
+    async def _main():
+        db = async_session()
+        try:
+            await seed_all(db)
+            # 修复 M1：独立运行必须显式 commit，否则仅 flush 的数据全部回滚丢失
+            await db.commit()
+            print("[SEED] 种子数据已提交")
+        finally:
+            await db.close()
+
+    asyncio.run(_main())

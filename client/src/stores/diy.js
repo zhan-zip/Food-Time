@@ -119,6 +119,8 @@ export const useDIYStore = defineStore('diy', () => {
       if (res.error) {
         const e = res.error
         suggestError.value = typeof e === 'object' ? (e.msg || e.message || JSON.stringify(e)) : String(e)
+        // 修复 M2：报错后回到 selecting 阶段，保留重试入口（否则 stage 卡在 suggesting、canSuggest 永不满足）
+        stage.value = 'selecting'
       }
     } catch (e) {
       suggestError.value = e?.message || '获取建议失败'

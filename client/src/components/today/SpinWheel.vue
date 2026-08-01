@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, watch, onMounted, nextTick, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -138,7 +138,8 @@ function spin() {
   canvas.style.transform = `rotate(${targetAngle}deg)`
   currentRotation.value = targetAngle
 
-  setTimeout(() => {
+  spinTimer = setTimeout(() => {
+    if (isUnmounted) return  // 修复 M4：组件已卸载则不再 emit
     spinning.value = false
     result.value = props.items[targetIdx]
     emit('done', props.items[targetIdx])
@@ -151,6 +152,14 @@ watch(() => props.items, () => {
 
 onMounted(() => {
   drawWheel()
+})
+
+// 修复 M4：组件卸载时清理旋转定时器，防止 emit 到已卸载组件（Vue 警告/内存泄漏）
+let spinTimer = null
+let isUnmounted = false
+onBeforeUnmount(() => {
+  isUnmounted = true
+  if (spinTimer) clearTimeout(spinTimer)
 })
 </script>
 
