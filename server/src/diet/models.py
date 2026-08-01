@@ -15,6 +15,7 @@ class DietRecord(Base):
     quantity_g = Column(Numeric(8, 2), nullable=False)
     record_date = Column(Date, nullable=False, index=True)
     record_time = Column(Time, nullable=False)
+    adjusted_calories = Column(Numeric(10, 2), nullable=True)  # 修正后热量（烹饪方式系数，营养方案B）
     created_at = Column(DateTime, default=func.now())
 
 

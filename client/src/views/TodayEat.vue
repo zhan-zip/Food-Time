@@ -228,6 +228,7 @@
           <label class="form-label">分量（克）</label>
           <input v-model.number="recordForm.quantity_g" class="input" type="number" min="10" max="5000" placeholder="例如 200" />
           <p class="text-xs text-muted" style="margin-top:4px">预估热量：{{ estimatedCal }} kcal</p>
+          <p class="text-xs text-muted" style="margin-top:2px; color:#999">* 营养数据基于《中国食物成分表（第六版）》食材加权估算</p>
         </div>
 
         <div class="modal-actions">

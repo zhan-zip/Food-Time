@@ -14,6 +14,33 @@ from src.diet.models import DietRecord, UserPreference
 
 router = APIRouter(prefix="/api/diet", tags=["饮食记录"])
 
+# 营养方案B：烹饪方式热量修正系数（参考国内外烹饪营养学研究通用结论）
+COOKING_FACTORS = {
+    "stir-fry": 1.20,  # 炒
+    "fry": 1.50,       # 炸
+    "roast": 1.05, "bake": 1.05, "grill": 1.05,  # 烤
+    "steam": 0.95,     # 蒸
+    "boil": 0.90,      # 煮
+    "braise": 1.10, "stew": 1.10,  # 炖
+    "raw": 1.00, "mix": 1.00,      # 生/凉拌
+}
+
+
+def _cooking_factor(food) -> float:
+    """根据食物 tags.cooking 返回热量修正系数（默认 1.00）"""
+    import json
+    tags = food.tags
+    if isinstance(tags, str):
+        try:
+            tags = json.loads(tags)
+        except Exception:
+            tags = {}
+    if isinstance(tags, dict):
+        cooking = tags.get("cooking")
+        if cooking in COOKING_FACTORS:
+            return COOKING_FACTORS[cooking]
+    return 1.00
+
 
 # ==================== Pydantic 模型 ====================
 
@@ -66,13 +93,15 @@ async def diet_records(
     items = []
     for record, food_name, cal_per_100g in rows:
         cal = float(cal_per_100g) * float(record.quantity_g) / 100 if cal_per_100g else 0
+        # 优先返回烹饪修正后的热量（方案B）
+        display_cal = float(record.adjusted_calories) if record.adjusted_calories is not None else cal
         items.append({
             "id": record.id,
             "food_id": record.food_id,
             "food_name": food_name,
             "meal_type": record.meal_type,
             "quantity_g": float(record.quantity_g),
-            "calories": round(cal, 1),
+            "calories": round(display_cal, 1),
             "record_date": record.record_date.isoformat(),
             "record_time": record.record_time.strftime("%H:%M"),
         })
@@ -98,6 +127,10 @@ async def create_diet_record(
     rec_date = date.fromisoformat(body.record_date) if body.record_date else date.today()
     now = datetime.now()
 
+    cal = float(food.calories_per_100g or 0) * body.quantity_g / 100
+    factor = _cooking_factor(food)
+    adjusted_cal = round(cal * factor, 2)
+
     record = DietRecord(
         user_id=current_user.id,
         food_id=body.food_id,
@@ -105,6 +138,7 @@ async def create_diet_record(
         quantity_g=body.quantity_g,
         record_date=rec_date,
         record_time=now.time(),
+        adjusted_calories=adjusted_cal,
     )
     db.add(record)
     await db.flush()
@@ -114,13 +148,13 @@ async def create_diet_record(
 
     await db.commit()
 
-    cal = float(food.calories_per_100g or 0) * body.quantity_g / 100
     return {
         "id": record.id,
         "food_name": food.name,
         "meal_type": record.meal_type,
         "quantity_g": body.quantity_g,
         "calories": round(cal, 1),
+        "adjusted_calories": adjusted_cal,
         "record_date": rec_date.isoformat(),
         "message": "记录成功",
     }
@@ -197,7 +231,10 @@ async def nutrition(
     q = (
         select(
             DietRecord.record_date,
-            func.sum(Food.calories_per_100g * DietRecord.quantity_g / 100).label("cal"),
+            func.sum(func.coalesce(
+                DietRecord.adjusted_calories,
+                Food.calories_per_100g * DietRecord.quantity_g / 100,
+            )).label("cal"),
             func.sum(Food.protein_per_100g * DietRecord.quantity_g / 100).label("pro"),
             func.sum(Food.fat_per_100g * DietRecord.quantity_g / 100).label("fat"),
             func.sum(Food.carbs_per_100g * DietRecord.quantity_g / 100).label("carbs"),
