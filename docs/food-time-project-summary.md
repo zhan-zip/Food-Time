@@ -1702,3 +1702,19 @@ card.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%) scale(
 
 **覆盖模块**：food, chat  
 **覆盖页面**：TodayEat.vue
+
+---
+
+### 测试 11 — 2026-08-01 C2 默认密钥修复
+
+| # | 测试内容 | 方式 | 结果 | 备注 |
+|---|---------|------|------|------|
+| 1 | `check_security_config` 三态单测（空值/默认值/安全值） | P2 | ✅ | 空值→2 条未配置；默认值→2 条默认值警告；安全值→空列表 |
+| 2 | 不安全配置启动拦截 — 模拟 `food-time-dev-secret` / `admin123` | P0 | ✅ | 打印明确拒绝提示，进程退出码=1 |
+| 3 | 安全配置（本地 .env）加载 `main` 模块 | P0 | ✅ | 通过安全校验，正常加载 |
+| 4 | 数据库实测 `init_admin` 重置默认管理员密码 | P2 | ✅ | 密码 admin123 → .env 新密码（verify_password 双验证） |
+
+**覆盖模块**：auth, config, main  
+**覆盖页面**：无（后端启动安全校验 + 管理员初始化）
+
+**修复说明**：`JWT_SECRET`/`ADMIN_PASSWORD` 默认值置空；启动时安全校验拒绝空/默认值并 `sys.exit(1)`；`init_admin` 检测历史管理员默认密码并自动重置。

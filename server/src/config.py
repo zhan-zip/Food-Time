@@ -4,12 +4,19 @@ from pydantic_settings import BaseSettings
 from typing import List
 
 
+# 已知不安全的开发默认值（历史遗留），用于启动安全校验
+INSECURE_LEGACY_VALUES = {
+    "JWT_SECRET": "food-time-dev-secret",
+    "ADMIN_PASSWORD": "admin123",
+}
+
+
 class Settings(BaseSettings):
     # 数据库
     DATABASE_URL: str = "mysql+aiomysql://root:123456@localhost:3307/food_time"
 
-    # JWT
-    JWT_SECRET: str = "food-time-dev-secret"
+    # JWT（默认置空，启动时强制校验，禁止使用不安全默认值）
+    JWT_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 10080  # 7 天
 
@@ -37,9 +44,9 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
-    # 管理员
+    # 管理员（默认置空，启动时强制校验，禁止使用不安全默认值）
     ADMIN_EMAIL: str = "admin@food-time.com"
-    ADMIN_PASSWORD: str = "admin123"
+    ADMIN_PASSWORD: str = ""
 
     # 调试
     DEBUG: bool = True
@@ -48,3 +55,23 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def check_security_config(cfg: Settings) -> list[str]:
+    """启动安全校验：检查 JWT 密钥与管理密码是否为空或仍使用已知不安全默认值。
+
+    返回问题列表；空列表表示配置安全。
+    """
+    problems: list[str] = []
+
+    if not cfg.JWT_SECRET:
+        problems.append("JWT_SECRET 未配置")
+    elif cfg.JWT_SECRET == INSECURE_LEGACY_VALUES["JWT_SECRET"]:
+        problems.append(f"JWT_SECRET 仍使用不安全的默认值 '{INSECURE_LEGACY_VALUES['JWT_SECRET']}'")
+
+    if not cfg.ADMIN_PASSWORD:
+        problems.append("ADMIN_PASSWORD 未配置")
+    elif cfg.ADMIN_PASSWORD == INSECURE_LEGACY_VALUES["ADMIN_PASSWORD"]:
+        problems.append(f"ADMIN_PASSWORD 仍使用不安全的默认值 'admin123'")
+
+    return problems

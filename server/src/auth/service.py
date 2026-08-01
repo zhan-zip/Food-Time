@@ -98,7 +98,7 @@ async def verify_email_code(db: AsyncSession, email: str, code: str) -> bool:
 # ---------- 管理员初始化 ----------
 
 async def init_admin(db: AsyncSession):
-    """确保管理员账号存在"""
+    """确保管理员账号存在；若发现历史管理员仍使用不安全默认密码，则重置为 .env 新密码"""
     result = await db.execute(select(User).where(User.email == settings.ADMIN_EMAIL))
     admin = result.scalar_one_or_none()
     if admin is None:
@@ -113,4 +113,10 @@ async def init_admin(db: AsyncSession):
         await db.flush()
         print(f"[INIT] 管理员已创建: {settings.ADMIN_EMAIL}")
     else:
-        print(f"[INIT] 管理员已存在: {settings.ADMIN_EMAIL}")
+        # 历史遗留：若密码仍是默认 admin123，重置为 .env 配置的新密码（修复 C2 闭环）
+        if verify_password("admin123", admin.password_hash):
+            admin.password_hash = hash_password(settings.ADMIN_PASSWORD)
+            await db.flush()
+            print("[INIT] 检测到管理员仍使用默认密码 admin123，已重置为 .env 配置的新密码")
+        else:
+            print(f"[INIT] 管理员已存在: {settings.ADMIN_EMAIL}")

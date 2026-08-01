@@ -1,12 +1,21 @@
 """FastAPI 应用入口"""
 
+import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.config import settings
+from src.config import settings, check_security_config
 from src.init_db import init_db
 from src.database import close_db
+
+# ========== 启动安全校验：拒绝不安全的 JWT 密钥 / 管理员密码 ==========
+_security_problems = check_security_config(settings)
+if _security_problems:
+    print("\n".join(["[安全校验失败] " + p for p in _security_problems]))
+    print("[安全校验失败] 请编辑 server/.env，为 JWT_SECRET 设置强随机字符串、为 ADMIN_PASSWORD 设置强密码，然后重新启动。")
+    print("[安全校验失败] 应用已拒绝启动。")
+    sys.exit(1)
 
 
 @asynccontextmanager
