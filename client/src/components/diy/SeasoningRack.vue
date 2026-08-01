@@ -28,7 +28,7 @@ const props = defineProps({
 const emit = defineEmits(['select'])
 
 function onSelect(item, type, e) {
-  emit('select', item, type, type, e)
+  emit('select', item, 'seasoning', type, e)
 }
 
 function isSelected(name, type) {

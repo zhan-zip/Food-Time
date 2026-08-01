@@ -146,6 +146,10 @@ img {
   transition: all 0.2s ease;
   font-family: var(--font-family);
 }
+.btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 .btn-primary {
   background: var(--color-primary);
   color: var(--color-text-inverse);
@@ -314,5 +318,13 @@ img {
   }
   .btn {
     padding: 8px 16px;
+  }
+}
+
+/* ===== 无障碍：尊重系统「减少动态效果」偏好 ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

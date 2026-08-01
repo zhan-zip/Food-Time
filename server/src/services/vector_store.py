@@ -103,6 +103,14 @@ class VectorStore:
         print(f"[VectorStore] 关键词索引构建完成，共 {len(self._keyword_index)} 条")
 
         # 2. 构建向量索引（耗时，仅当 embedding 可用）
+        # 修复 C3：若已有索引且有数据，跳过删除重建（避免多 worker 并发 delete 损坏 ChromaDB）
+        try:
+            existing = self.collection.count()
+        except Exception:
+            existing = 0
+        if existing > 0:
+            print(f"[VectorStore] 向量索引已存在（{existing} 条），跳过重建（C3）")
+            return
         try:
             self._client.delete_collection(COLLECTION_NAME)
         except Exception:

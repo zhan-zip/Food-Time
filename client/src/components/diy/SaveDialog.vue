@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="visible" class="dialog-overlay" @click.self="$emit('cancel')">
-      <div class="dialog-card">
+      <div class="dialog-card" role="dialog" aria-modal="true" @keydown.escape="$emit('cancel')">
         <!-- 步骤 0：确认保存 -->
         <div v-if="step === 0">
           <h3 class="dialog-title">保存 DIY 菜谱？</h3>
@@ -74,7 +74,6 @@ import { ref, watch } from 'vue'
 const props = defineProps({
   visible: { type: Boolean, default: false },
   defaultName: { type: String, default: '' },
-  methodLabel: { type: String, default: '炒锅' },
   savedResult: { type: Object, default: null },
   saveError: { type: String, default: '' },
   cookingMethods: { type: Array, default: () => [

@@ -46,6 +46,8 @@ defineEmits(['click'])
 }
 .ingredient-card.selected {
   border-color: var(--card-color, var(--color-primary));
+  /* color-mix 兼容 fallback：旧浏览器不支持时以主色作为底色 */
+  background: var(--color-primary);
   background: color-mix(in srgb, var(--card-color, #D9A15B) 8%, white);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-color, #D9A15B) 30%, transparent);
 }

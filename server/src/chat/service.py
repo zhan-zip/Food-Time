@@ -41,6 +41,19 @@ MAX_HISTORY_MESSAGES = 20
 _PERSONA_PATH = os.path.join(os.path.dirname(__file__), "persona.txt")
 
 
+def _read_persona() -> str:
+    """读取 persona.txt，失败时返回默认人设"""
+    try:
+        with open(_PERSONA_PATH, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return "你是食光记平台的AI营养助手。"
+
+
+# 模块级缓存：只读取一次 persona.txt，避免每次请求重复 open()
+_PERSONA_CONTENT = _read_persona()
+
+
 class ChatService:
     """AI 对话管线"""
 
@@ -182,12 +195,8 @@ class ChatService:
         return f"{layer1}\n---\n{layer2}\n---\n{layer3}{layer4}\n---\n{layer5}"
 
     def _load_persona(self) -> str:
-        """加载并缓存 persona"""
-        try:
-            with open(_PERSONA_PATH, "r", encoding="utf-8") as f:
-                return f.read()
-        except Exception:
-            return "你是食光记平台的AI营养助手。"
+        """返回模块级缓存的 persona 内容（启动时读取一次）"""
+        return _PERSONA_CONTENT
 
     # ===========================================================
     # 历史消息管理

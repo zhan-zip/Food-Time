@@ -21,6 +21,7 @@ from src.chat.schemas import ChatSendRequest
 from src.chat.service import ChatService
 from src.chat.models import Conversation
 from src.services.deepseek import deepseek
+from src.rate_limit import rate_limit
 
 router = APIRouter(prefix="/api/chat", tags=["AI 对话"])
 
@@ -30,6 +31,7 @@ router = APIRouter(prefix="/api/chat", tags=["AI 对话"])
 # ============================================================
 
 @router.post("/send")
+@rate_limit("chat", 20, 60, use_user=True)  # H5：AI 对话 20 次/分钟/用户
 async def chat_send(
     req: ChatSendRequest,
     request: Request,

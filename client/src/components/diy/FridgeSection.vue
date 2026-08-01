@@ -78,7 +78,6 @@ function isSelected(name, type) {
 }
 
 function onSelectItem(item, catKey, type, e) {
-  console.log('[Fridge] select:', item.name, type)
   emit('select', item, catKey, type, e)
 }
 

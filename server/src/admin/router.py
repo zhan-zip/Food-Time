@@ -102,6 +102,7 @@ async def approve_recipe(
 
     recipe.publish_status = "approved"
     await db.flush()
+    await db.commit()
     return {"message": "审核通过", "recipe_id": recipe_id}
 
 
@@ -122,6 +123,7 @@ async def reject_recipe(
 
     recipe.publish_status = "rejected"
     await db.flush()
+    await db.commit()
     return {"message": "已拒绝", "recipe_id": recipe_id}
 
 

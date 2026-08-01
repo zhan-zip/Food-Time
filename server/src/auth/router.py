@@ -1,7 +1,5 @@
 """认证模块 - API 路由"""
 
-from collections import defaultdict, deque
-import time
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,26 +8,14 @@ from src.database import get_db
 from src.dependencies import get_current_user
 from src.auth import schemas, service
 from src.auth.models import User
+from src.rate_limit import rate_limit
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
-# 修复 M13：send-code 简单 IP 限速（内存实现，1 次/分钟/IP，防邮件轰炸）
-_send_code_history: dict[str, deque] = defaultdict(deque)
-
-
-def _check_send_code_rate(ip: str) -> bool:
-    now = time.time()
-    q = _send_code_history[ip]
-    while q and q[0] < now - 60:
-        q.popleft()
-    if len(q) >= 1:
-        return False
-    q.append(now)
-    return True
-
 
 @router.post("/register", response_model=schemas.TokenResponse)
-async def register(data: schemas.UserRegister, db: AsyncSession = Depends(get_db)):
+@rate_limit("register", 5, 60)  # H5：注册 5 次/分钟/IP
+async def register(data: schemas.UserRegister, request: Request, db: AsyncSession = Depends(get_db)):
     """邮箱注册"""
     # 修复 H2：移除"先 SELECT 查重再 INSERT"的 TOCTOU 竞态，
     # 改为直接 INSERT，依赖唯一索引 + IntegrityError 捕获，并发注册返回 400 而非 500。
@@ -48,7 +34,8 @@ async def register(data: schemas.UserRegister, db: AsyncSession = Depends(get_db
 
 
 @router.post("/login", response_model=schemas.TokenResponse)
-async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
+@rate_limit("login", 5, 60)  # H5：登录 5 次/分钟/IP
+async def login(data: schemas.UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
     """邮箱登录"""
     user = await service.authenticate_user(db, data.email, data.password)
     if user is None:
@@ -61,16 +48,13 @@ async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/send-code")
+@rate_limit("send_code", 1, 60)  # H5：验证码 1 次/分钟/IP（由 M13 内联升级为通用限速）
 async def send_code(
     data: schemas.SendCode,
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """发送邮箱验证码"""
-    # 修复 M13：IP 限速 1 次/分钟，防邮件轰炸
-    client_ip = request.client.host if request.client else "unknown"
-    if not _check_send_code_rate(client_ip):
-        raise HTTPException(status_code=429, detail="发送过于频繁，请 1 分钟后再试")
     code = await service.save_verification_code(db, data.email)
     # 修复 M7：先提交验证码记录，释放 DB 事务，再执行耗时的 SMTP 发送（避免长持有连接/行锁）
     await db.commit()

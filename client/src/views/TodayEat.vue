@@ -43,7 +43,7 @@
       <!-- 决策快捷入口 -->
       <div class="decision-actions">
         <button class="btn btn-outline" @click="tab='decide'">&#x1F3B0; 随机转盘</button>
-        <button class="btn btn-outline" @click="tab='decide'; showFilterInDecide = true">&#x1F50D; 高级筛选</button>
+        <button class="btn btn-outline" @click="tab='decide'">&#x1F50D; 高级筛选</button>
       </div>
 
       <!-- 结果列表 -->
@@ -262,7 +262,6 @@ const allCuisineOptions = ref([])
 const loading = ref(false)
 
 // ====== 筛选 FR-21 ======
-const showFilterInDecide = ref(false)
 const filterForm = ref({ spicy: '', cuisine: '', maxCal: null, cookMethod: '' })
 
 const spicyOptions = [

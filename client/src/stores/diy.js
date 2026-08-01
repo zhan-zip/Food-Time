@@ -140,10 +140,6 @@ export const useDIYStore = defineStore('diy', () => {
     stage.value = 'saving'
   }
 
-  function onAnimationDone() {
-    animationPlaying.value = false
-  }
-
   function openSaveDialog() {
     showSaveDialog.value = true
   }
@@ -207,7 +203,7 @@ export const useDIYStore = defineStore('diy', () => {
     // actions
     addToPlate, removeFromPlate, clearPlate,
     loadIngredients, fetchSuggestion,
-    startCooking, skipAnimation, onAnimationDone,
+    startCooking, skipAnimation,
     openSaveDialog, doSave, doPublishToSquare, loadMyRecipes,
   }
 })

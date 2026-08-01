@@ -32,7 +32,7 @@
 </template>
 
 <script setup>
-import { watch } from 'vue'
+import { watch, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -42,16 +42,22 @@ const emit = defineEmits(['remove', 'clear'])
 
 // 手动飞入动画：watch items 长度变化，给新增项加 _animating 标记
 let lastLength = 0
+const animTimers = []
 watch(() => props.items.length, (newLen) => {
   if (newLen > lastLength) {
     // 新增的项在尾部，标记动画
     for (let i = lastLength; i < newLen; i++) {
       const item = props.items[i]
       item._animating = true
-      setTimeout(() => { item._animating = false }, 500)
+      animTimers.push(setTimeout(() => { item._animating = false }, 500))
     }
   }
   lastLength = newLen
+})
+// 卸载时清理动画标记定时器，避免组件销毁后仍触发 DOM 更新
+onBeforeUnmount(() => {
+  animTimers.forEach(clearTimeout)
+  animTimers.length = 0
 })
 </script>
 
