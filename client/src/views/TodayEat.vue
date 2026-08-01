@@ -321,7 +321,7 @@ onMounted(async () => {
     // 高德 IP 定位 — 返回纯中文城市名
     async () => {
       const r = await fetch(
-        'https://restapi.amap.com/v3/ip?key=3cacb7ced82923ae69ceb9eea7100643',
+        'https://restapi.amap.com/v3/ip?key=38b348fb67f2d42cb1fa0fe61301bc45',
         { signal: AbortSignal.timeout(5000) }
       )
       if (!r.ok) throw new Error('fail')
