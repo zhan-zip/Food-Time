@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.database import get_db
 from src.dependencies import get_current_user
 from src.auth import schemas, service
@@ -47,6 +48,8 @@ async def login(data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
 async def send_code(data: schemas.SendCode, db: AsyncSession = Depends(get_db)):
     """发送邮箱验证码"""
     code = await service.save_verification_code(db, data.email)
+    # 修复 M7：先提交验证码记录，释放 DB 事务，再执行耗时的 SMTP 发送（避免长持有连接/行锁）
+    await db.commit()
 
     from src.services.email import email_service
     if email_service.is_configured:
@@ -59,11 +62,13 @@ async def send_code(data: schemas.SendCode, db: AsyncSession = Depends(get_db)):
         else:
             raise HTTPException(status_code=500, detail="邮件发送失败，请确认 SMTP 配置正确")
 
-    # 降级：未配置 SMTP 时打印到控制台
+    # 降级：未配置 SMTP 时打印到控制台（修复 M6：不再通过 HTTP 返回验证码明文）
     print(f"\n{'='*50}")
     print(f"[验证码] 邮箱: {data.email} → 验证码: {code}")
     print(f"{'='*50}\n")
-    return {"message": "验证码已发送（SMTP 未配置，请查看控制台）", "code": code}
+    if settings.DEBUG:
+        return {"message": "验证码已发送（SMTP 未配置，请查看后端控制台）"}
+    raise HTTPException(status_code=500, detail="邮件服务未配置，请联系管理员")
 
 
 @router.post("/verify-email")

@@ -1,6 +1,6 @@
 ﻿"""认证模块 - 业务逻辑"""
 
-import random
+import secrets
 import string
 from datetime import datetime, timedelta, timezone
 
@@ -28,7 +28,8 @@ def create_access_token(user_id: int) -> str:
 
 
 def generate_verification_code() -> str:
-    return "".join(random.choices(string.digits, k=6))
+    # 修复 M5：改用密码学安全随机数（secrets），避免验证码可被预测
+    return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
 # ---------- 用户服务 ----------

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import Optional
 
 from src.database import get_db
@@ -46,8 +46,8 @@ async def search_foods(
     if category_id:
         query = query.where(Food.category_id == category_id)
 
-    # 总数
-    count_query = select(Food).where(Food.is_public == True)
+    # 总数（修复 H4：用 COUNT 聚合，避免把全部匹配行加载进内存再数）
+    count_query = select(func.count(Food.id)).where(Food.is_public == True)
     if keyword:
         count_query = count_query.where(Food.name.like(f"%{keyword}%"))
     if cuisine:
@@ -55,8 +55,7 @@ async def search_foods(
     if category_id:
         count_query = count_query.where(Food.category_id == category_id)
 
-    total_result = await db.execute(count_query)
-    total = len(total_result.scalars().all())
+    total = (await db.execute(count_query)).scalar() or 0
 
     # 分页
     query = query.offset((page - 1) * page_size).limit(page_size)

@@ -41,6 +41,7 @@ class EmailService:
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "plain", "utf-8"))
 
+        server = None
         try:
             if self.port == 465:
                 # SSL 直连
@@ -52,12 +53,18 @@ class EmailService:
 
             server.login(self.user, self.password)
             server.sendmail(self.from_addr, to_email, msg.as_string())
-            server.quit()
             logger.info(f"邮件已发送: {to_email}")
             return True
         except Exception as e:
             logger.error(f"邮件发送失败 ({to_email}): {e}")
             return False
+        finally:
+            # 修复 M8：无论成功/失败都确保关闭 SMTP 连接，防止 socket 泄漏
+            if server is not None:
+                try:
+                    server.quit()
+                except Exception:
+                    pass
 
     def send_verification_code(self, to_email: str, code: str) -> bool:
         """发送验证码邮件"""
