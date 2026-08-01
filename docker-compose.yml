@@ -1,0 +1,63 @@
+# 食光记 一键容器化部署
+# 启动: docker compose up -d --build
+# 访问: http://localhost:8080
+# 说明: JWT_SECRET / ADMIN_PASSWORD 建议通过环境变量注入真实值（默认值非空且避开安全校验拒绝项）
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: food-time-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: food_time
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot123456"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  backend:
+    build: ./server
+    container_name: food-time-backend
+    environment:
+      DATABASE_URL: mysql+aiomysql://root:root123456@mysql:3306/food_time
+      JWT_SECRET: ${JWT_SECRET:-docker-dev-secret-change-me}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 10080
+      ADMIN_EMAIL: admin@food-time.com
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-docker-admin-password-2026}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: https://api.deepseek.com/v1
+      DEEPSEEK_MODEL: deepseek-chat
+      QWEN_API_KEY: ${QWEN_API_KEY:-}
+      QWEN_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+      QWEN_MODEL: qwen-vl-max
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: 587
+      CORS_ORIGINS: http://localhost:8080
+      DEBUG: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./server/chroma_data:/app/chroma_data   # RAG 向量库持久化
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  frontend:
+    build: ./client
+    container_name: food-time-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
