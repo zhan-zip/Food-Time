@@ -11,7 +11,7 @@ class ExpenseRecord(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     amount = Column(Numeric(10, 2), nullable=False)
-    category = Column(String(50), nullable=False)  # food / shopping / transport / entertainment / other
+    category = Column(String(50), nullable=False)  # food / delivery / snack / drink / grocery（饮食聚焦）
     description = Column(String(500), nullable=True)
     record_date = Column(Date, nullable=False, index=True)
     input_method = Column(String(20), default="manual")  # manual / ocr
