@@ -2,7 +2,7 @@
 
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import bcrypt
 from jose import jwt
@@ -22,7 +22,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(user_id: int) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
     to_encode = {"sub": str(user_id), "exp": expire}
     return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
@@ -69,7 +69,7 @@ async def save_verification_code(db: AsyncSession, email: str) -> str:
     ev = EmailVerification(
         email=email,
         code=code,
-        expires_at=datetime.utcnow() + timedelta(minutes=10),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
     )
     db.add(ev)
     await db.flush()
@@ -82,7 +82,7 @@ async def verify_email_code(db: AsyncSession, email: str, code: str) -> bool:
         .where(EmailVerification.email == email)
         .where(EmailVerification.code == code)
         .where(EmailVerification.used == False)
-        .where(EmailVerification.expires_at > datetime.utcnow())
+        .where(EmailVerification.expires_at > datetime.now(timezone.utc))
     )
     ev = result.scalar_one_or_none()
     if ev is None:

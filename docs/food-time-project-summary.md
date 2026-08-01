@@ -1781,3 +1781,19 @@ card.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%) scale(
 **覆盖页面**：Assistant.vue（AI 对话）、DIY.vue（保存）、Expense.vue（OCR 不受影响）
 
 **修复说明**：H6 图片 URL 白名单校验防 SSRF；H2 注册改用 `IntegrityError` 捕获防竞态；H7 未公开/未审核数据加访问过滤；H8 AI 客户端显式超时；H3 种子数据 tags 改 dict 格式。
+
+---
+
+### 测试 15 — 2026-08-01 第一批：C4/H9/H10/H1
+
+| # | 测试内容 | 方式 | 结果 | 备注 |
+|---|---------|------|------|------|
+| 1 | C4 utcnow 替换 — 全库无残留 + JWT 生成 | P2 | ✅ | `timezone.utc`，token 正常 |
+| 2 | H9 金额解析 — 11 个金额场景 | P2 | ✅ | 非数字不再 500，返回识别失败提示 |
+| 3 | H10 删除用户 — 7 类关联数据清理 | P2 | ✅ | `delete_user` 无外键错误、无残留 |
+| 4 | H1 SSE done — mock `run` 抛异常 | P0 | ✅ | error 后补发 done，顺序正确 |
+
+**覆盖模块**：auth, expense, admin, chat  
+**覆盖页面**：Expense.vue（OCR）、Admin.vue（用户管理）、Assistant.vue（AI 对话）
+
+**修复说明**：C4 时间戳改时区感知；H9 金额安全解析；H10 删除用户清理关联数据（方案 A）；H1 SSE 错误后补发 done。

@@ -9,6 +9,7 @@ from sqlalchemy import select, func, and_
 import base64
 import tempfile
 import os
+import re
 
 from src.database import get_db
 from src.dependencies import get_current_user
@@ -17,6 +18,27 @@ from src.expense.models import ExpenseRecord
 from src.services.qwen import qwen_vl
 
 router = APIRouter(prefix="/api/expense", tags=["记账"])
+
+
+def _parse_amount(raw) -> float:
+    """安全解析 OCR 金额（修复 H9）：提取数字部分，兼容 "12.50元"、"12,50"、"约20" 等，失败返回 0"""
+    if raw is None:
+        return 0.0
+    s = str(raw).strip()
+    if not s:
+        return 0.0
+    # 单逗号且无小数点 → 欧洲格式小数（12,50 → 12.50）
+    if s.count(",") == 1 and s.count(".") == 0:
+        try:
+            return float(s.replace(",", "."))
+        except ValueError:
+            pass
+    # 去掉千分位逗号（12,345.67 → 12345.67）
+    s = s.replace(",", "")
+    m = re.search(r"\d+(\.\d+)?", s)
+    if m:
+        return float(m.group(0))
+    return 0.0
 
 
 # ==================== Pydantic 模型 ====================
@@ -258,7 +280,7 @@ async def ocr_expense(
     if not result:
         return {"success": False, "message": "未能识别有效消费信息，请手动录入"}
 
-    amount = float(result.get("amount", 0))
+    amount = _parse_amount(result.get("amount"))
     category = result.get("category", "food")
     description = result.get("description", "")
 

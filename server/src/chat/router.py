@@ -55,6 +55,8 @@ async def chat_send(
             pass  # 客户端断开连接，正常结束
         except Exception as e:
             yield _sse("error", {"message": str(e)})
+            # 修复 H1：错误后必须补发 done，否则前端 SSE 等待 done 关闭连接，永久显示"思考中…"
+            yield _sse("done", {"session_id": req.session_id, "tool_calls": [], "message_id": 0})
 
     return StreamingResponse(stream(), media_type="text/event-stream")
 

@@ -2,13 +2,17 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 
 from src.database import get_db
 from src.dependencies import get_admin_user
-from src.auth.models import User
-from src.custom_food.models import CustomRecipe
+from src.auth.models import User, EmailVerification
+from src.custom_food.models import CustomRecipe, CustomRecipeIngredient
 from src.food.models import Food
+from src.diet.models import DietRecord, UserPreference
+from src.expense.models import ExpenseRecord
+from src.chat.models import Conversation, LongMemory
+from src.public_food.models import Like, Favorite, Comment
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
 
@@ -198,6 +202,25 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
+    # 修复 H10：删除用户前清理全部关联数据（防外键约束 → 500）
+    recipe_ids = select(CustomRecipe.id).where(CustomRecipe.user_id == user_id)
+    # 该用户菜谱的食材明细
+    await db.execute(delete(CustomRecipeIngredient).where(CustomRecipeIngredient.recipe_id.in_(recipe_ids)))
+    # 任何用户对该用户菜谱的点赞/收藏/评论
+    await db.execute(delete(Like).where(Like.recipe_id.in_(recipe_ids)))
+    await db.execute(delete(Favorite).where(Favorite.recipe_id.in_(recipe_ids)))
+    await db.execute(delete(Comment).where(Comment.recipe_id.in_(recipe_ids)))
+    # 该用户的菜谱
+    await db.execute(delete(CustomRecipe).where(CustomRecipe.user_id == user_id))
+    # 该用户的各类业务数据
+    await db.execute(delete(DietRecord).where(DietRecord.user_id == user_id))
+    await db.execute(delete(ExpenseRecord).where(ExpenseRecord.user_id == user_id))
+    await db.execute(delete(Conversation).where(Conversation.user_id == user_id))
+    await db.execute(delete(LongMemory).where(LongMemory.user_id == user_id))
+    await db.execute(delete(UserPreference).where(UserPreference.user_id == user_id))
+    # 该用户邮箱的验证码记录
+    await db.execute(delete(EmailVerification).where(EmailVerification.email == user.email))
+    # 删除用户
     await db.delete(user)
     await db.commit()
 

@@ -76,12 +76,15 @@
 - **影响**：生产环境多 worker 部署必定出问题，且 ChromaDB 的持久化文件可能损坏。
 - **修复建议**：改为启动时检查已有索引 → 若已存在则跳过（不删除）；或使用 ChromaDB 的 `upsert` 代替 `delete + add`。同时用文件锁或数据库标志位确保只有一个 worker 执行初始化。
 
-### [ ] C4. `datetime.utcnow()` 已被 Python 3.12+ 废弃
+### [x] C4. `datetime.utcnow()` 已被 Python 3.12+ 废弃 ✅ 已修复
 
 - **涉及文件**：`server/src/auth/service.py:25,72`、`server/src/chat/service.py` 及多处
 - **问题描述**：Python 3.12 废弃了 `datetime.utcnow()`，项目运行在 Python 3.13 上。运行时产生 `DeprecationWarning`，且 naive datetime 无法正确处理时区。所有时间戳都是无时区信息的"裸时间"。
 - **影响**：未来 Python 版本可能彻底移除此方法导致运行时错误。当前所有 JWT 过期时间、验证码过期时间、记录时间等均无时区信息，跨时区部署时行为不可预期。
 - **修复建议**：全局替换为 `datetime.now(datetime.UTC)` 或 `datetime.now(timezone.utc)`。
+- **✅ 修复记录（2026-08-01）**：
+  - `auth/service.py`：3 处 `datetime.utcnow()` 全局替换为 `datetime.now(timezone.utc)`，import 补充 `timezone`
+  - 测试：全库源码无 `utcnow` 残留，JWT token 生成正常
 
 ### [x] C5. SaveDialog 保存失败仍显示"保存成功" ✅ 已修复
 
@@ -101,12 +104,15 @@
 
 ## 🟠 高 (High) — 10 个
 
-### [ ] H1. SSE error 事件后没有 done → 前端永久显示"思考中…"
+### [x] H1. SSE error 事件后没有 done → 前端永久显示"思考中…" ✅ 已修复
 
 - **涉及文件**：`server/src/chat/router.py:50-57`、`server/src/chat/service.py:95-96`
 - **问题描述**：当 `json.loads(fn.arguments)` 解析失败、工具执行异常或流式输出中断时，路由只发送 `error` 事件但不发送 `done` 事件。前端 SSE 解析器等待 `done` 事件来关闭连接和清除 loading 状态。
 - **影响**：AI 对话中断后前端一直显示"思考中…"，用户无法发送下一条消息，只能刷新页面。
 - **修复建议**：在所有 error 分支后追加 `yield _sse("done", {...})`，确保客户端始终收到终止事件。
+- **✅ 修复记录（2026-08-01）**：
+  - `chat/router.py`：`stream()` 的 `except Exception` 分支在发送 `error` 后补发 `done` 事件，确保任何异常下前端都能结束 loading
+  - 测试：mock `ChatService.run` 抛异常，TestClient 验证 SSE 响应含 `error` → `done` 且顺序正确
 
 ### [x] H2. 用户注册 TOCTOU 竞态 → 500 错误 ✅ 已修复
 
@@ -183,19 +189,25 @@
   - `qwen.py`：client 增加相同 timeout（embed_client 已在 C1 修复时配置）
   - 测试：三个 client 超时配置全部生效
 
-### [ ] H9. OCR 返回非数字金额 → 500
+### [x] H9. OCR 返回非数字金额 → 500 ✅ 已修复
 
 - **涉及文件**：`server/src/expense/router.py:261`
 - **问题描述**：`amount = float(result.get("amount", 0))`——Qwen VL 返回的 amount 可能是 `"12.50元"`、`"12,50"`、`"约20"` 等非纯数字字符串。`float()` 直接抛 `ValueError` → 500。
 - **影响**：用户上传了一张正常的小票 → OCR 识别成功但金额格式不规范 → 用户看到 500 错误，而非友好的"识别结果不准确，请手动调整"。
 - **修复建议**：对 amount 做安全解析——尝试 `float()` 前先用正则提取数字部分，失败时返回 `amount: 0` 并提示用户手动输入。
+- **✅ 修复记录（2026-08-01）**：
+  - `expense/router.py`：新增 `_parse_amount()` 安全解析（正则提取数字，兼容 "12.50元"/"12,50"/"约20"/千分位，失败返回 0），替换原 `float()` 直接转换
+  - 测试：11 个金额场景全部通过，非数字不再抛 500（返回"未能识别有效金额"提示）
 
-### [ ] H10. admin delete_user 无外键处理 → 500
+### [x] H10. admin delete_user 无外键处理 → 500 ✅ 已修复
 
 - **涉及文件**：`server/src/admin/router.py:201`
 - **问题描述**：直接 `db.delete(user)` 删除用户。若该用户有关联的 `diet_records`、`expense_records`、`custom_recipes`、`favorites`、`comments` 等数据，数据库外键约束触发 `IntegrityError` → 500。
 - **影响**：管理员无法删除有历史数据的用户。
 - **修复建议**：方案 A——删除前先清理关联数据（较安全）；方案 B——改为软删除（添加 `deleted_at` 字段，优于保留审计轨迹）。
+- **✅ 修复记录（2026-08-01）**：**采用方案 A（清理关联数据）**
+  - `admin/router.py`：`delete_user` 删除前依次清理全部关联数据（custom_recipe_ingredients → 指向其菜谱的点赞/收藏/评论 → custom_recipes → diet/expense/conversation/long_memory/preference → email_verifications）
+  - 测试：创建含 7 类关联数据的测试用户，`delete_user` 成功删除且无外键错误、无数据残留
 
 ---
 
