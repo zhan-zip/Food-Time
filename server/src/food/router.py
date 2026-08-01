@@ -1,10 +1,13 @@
 """食物库模块 - API 路由（P0：基础搜索+详情 / P2：DIY食材接口）"""
 
+import httpx
+
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional
 
+from src.config import settings
 from src.database import get_db
 from src.food.models import Food, FoodCategory
 from src.services.ingredient_emoji import (
@@ -167,6 +170,43 @@ async def get_diy_ingredients(db: AsyncSession = Depends(get_db)):
         "fridge": {"left": left, "right": right},
         "seasoning": seasoning,
     }
+
+
+# ============================================================
+# 菜品图片代理（Pixabay）：Key 仅存服务端 .env，不暴露前端
+# ============================================================
+_image_cache: dict[str, str] = {}
+
+
+@router.get("/image")
+async def food_image(query: str = Query("", description="食物名")):
+    """按食物名从 Pixabay 获取菜品图片 URL（后端代理，避免 Key 泄露）"""
+    query = query.strip()
+    if not query:
+        return {"url": None}
+    if query in _image_cache:
+        return {"url": _image_cache[query] or None}
+    if not settings.PIXABAY_API_KEY:
+        return {"url": None}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get("https://pixabay.com/api/", params={
+                "key": settings.PIXABAY_API_KEY,
+                "q": query,
+                "image_type": "photo",
+                "per_page": 3,
+                "safesearch": True,
+                "lang": "zh",
+            })
+            hits = (r.json().get("hits") or [])
+            if hits:
+                url = hits[0].get("webformatURL") or hits[0].get("largeImageURL")
+                _image_cache[query] = url or ""
+                return {"url": url}
+    except Exception as e:
+        print(f"[Pixabay] 查询失败({query}): {e}")
+    _image_cache[query] = ""
+    return {"url": None}
 
 
 @router.get("/{food_id}")

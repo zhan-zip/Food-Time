@@ -31,7 +31,7 @@
         </div>
         <div v-else class="recommend-grid">
           <router-link v-for="r in recommended" :key="r.id" :to="'/square/' + r.id" class="card recommend-card">
-            <div class="recommend-img-placeholder">🍽️</div>
+            <div class="recommend-img-placeholder"><FoodImage :name="r.name" /></div>
             <div class="recommend-info">
               <h3>{{ r.name }}</h3>
               <p class="text-sm text-secondary">{{ r.cuisine || '家常' }}<template v-if="r.calories"> · {{ r.calories }} kcal/100g</template></p>
@@ -61,6 +61,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getRecipes } from '../api/public'
+import FoodImage from '../components/FoodImage.vue'
 
 const features = [
   { icon: '\u{1F50D}', title: '食物决策', desc: '筛选、转盘、AI推荐，三种方式帮你快速决定吃什么' },

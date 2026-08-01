@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_MODEL: str = "qwen-vl-max"
 
+    # Pixabay 图片服务（Key 仅存 .env，不暴露前端）
+    PIXABAY_API_KEY: str = ""
+
     # 邮件
     SMTP_HOST: str = "smtp.example.com"
     SMTP_PORT: int = 587

@@ -32,8 +32,7 @@
         @click="goDetail(r.id)"
       >
         <div class="square-img">
-          <img v-if="r.image_url" :src="r.image_url" :alt="r.name" />
-          <span v-else>&#x1F372;</span>
+          <FoodImage :name="r.name" />
         </div>
         <div class="square-info">
           <h3>{{ r.name }}</h3>
@@ -60,6 +59,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getRecipes } from '../api/public'
+import FoodImage from '../components/FoodImage.vue'
 
 const router = useRouter()
 const recipes = ref([])
