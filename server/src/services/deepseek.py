@@ -27,9 +27,11 @@ class DeepSeekClient:
     @property
     def client(self) -> AsyncOpenAI:
         if self._client is None:
+            # 修复 H8：显式设置超时，避免 openai 库默认 600s 导致 API 挂起时阻塞 10 分钟
             self._client = AsyncOpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url,
+                timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0),
             )
         return self._client
 

@@ -14,13 +14,15 @@ router = APIRouter(prefix="/api/auth", tags=["认证"])
 @router.post("/register", response_model=schemas.TokenResponse)
 async def register(data: schemas.UserRegister, db: AsyncSession = Depends(get_db)):
     """邮箱注册"""
-    # 检查邮箱是否已注册
-    from sqlalchemy import select
-    result = await db.execute(select(User).where(User.email == data.email))
-    if result.scalar_one_or_none():
+    # 修复 H2：移除"先 SELECT 查重再 INSERT"的 TOCTOU 竞态，
+    # 改为直接 INSERT，依赖唯一索引 + IntegrityError 捕获，并发注册返回 400 而非 500。
+    from sqlalchemy.exc import IntegrityError
+    try:
+        user = await service.create_user(db, data.email, data.password, data.nickname)
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
         raise HTTPException(status_code=400, detail="该邮箱已注册")
-
-    user = await service.create_user(db, data.email, data.password, data.nickname)
     token = service.create_access_token(user.id)
     return schemas.TokenResponse(
         access_token=token,

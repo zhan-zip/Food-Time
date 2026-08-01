@@ -98,7 +98,11 @@ async def get_recipe_detail(
         .join(Food, CustomRecipe.food_id == Food.id)
         .join(User, CustomRecipe.user_id == User.id)
         .outerjoin(FoodCategory, Food.category_id == FoodCategory.id)
-        .where(CustomRecipe.id == recipe_id)
+        .where(
+            CustomRecipe.id == recipe_id,
+            CustomRecipe.is_published == True,
+            CustomRecipe.publish_status == "approved",
+        )
     )
     row = (await db.execute(q)).first()
     if not row:

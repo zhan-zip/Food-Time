@@ -108,19 +108,25 @@
 - **影响**：AI 对话中断后前端一直显示"思考中…"，用户无法发送下一条消息，只能刷新页面。
 - **修复建议**：在所有 error 分支后追加 `yield _sse("done", {...})`，确保客户端始终收到终止事件。
 
-### [ ] H2. 用户注册 TOCTOU 竞态 → 500 错误
+### [x] H2. 用户注册 TOCTOU 竞态 → 500 错误 ✅ 已修复
 
 - **涉及文件**：`server/src/auth/router.py:17-20`
 - **问题描述**：注册流程中先 `SELECT` 检查邮箱是否已注册，再 `INSERT`。两个并发请求注册同一邮箱时，都能通过预检查 → 其中一个 `INSERT` 触发唯一索引冲突 → `IntegrityError` → HTTP 500。
 - **影响**：用户看到 500 错误，以为是系统故障，实际是并发注册导致的竞态。
 - **修复建议**：移除预检查的 SELECT，直接用 `try/except IntegrityError` 包裹 INSERT，捕获后返回 400 "该邮箱已注册"。
+- **✅ 修复记录（2026-08-01）**：
+  - `auth/router.py`：移除"先 SELECT 查重再 INSERT"预检查，改用 `try/except IntegrityError` 包裹，并发注册返回 400 "该邮箱已注册" 而非 500
+  - 测试：3 并发注册同一邮箱 → 1 成功 + 2 duplicate，无 500
 
-### [ ] H3. 种子数据 `tags` 存储格式错误
+### [x] H3. 种子数据 `tags` 存储格式错误 ✅ 已修复
 
 - **涉及文件**：`server/src/seed.py:185`
 - **问题描述**：种子数据中 `tags = '{"spicy":"high",...}'`（Python str）直接赋值给 SQLAlchemy `JSON` 列。MySQL 中存储的是 `"{\"spicy\":\"high\"}"`（被二次序列化的字符串）而非 `{"spicy":"high"}`（JSON 对象）。运行时创建的 dict-格式 tags 和种子数据的 string-格式 tags 不兼容。
 - **影响**：种子数据的 tags 无法被 `JSON_EXTRACT` 查询；前端/工具读取 tags 时需额外判断类型，且部分代码假设 tags 是 dict 会出错。
 - **修复建议**：将 `seed.py` 中所有 tags 从字符串改为 Python dict 字面量。
+- **✅ 修复记录（2026-08-01）**：
+  - `seed.py`：全部 111 处字符串 tags（JSON 字符串）改为 Python dict 字面量
+  - 测试：SAMPLE_FOODS / SAMPLE_RECIPES 全部 tags 均为 dict 类型
 
 ### [ ] H4. 食物搜索每次加载全部匹配行做计数
 
@@ -140,14 +146,18 @@
   - AI 对话接口可被无限消耗 API 额度（DeepSeek API 按 token 计费）
 - **修复建议**：引入 slowapi 或类似中间件，对敏感接口设置合理的限速（如登录 5 次/分钟/IP，send-code 1 次/分钟/邮箱，chat 20 次/分钟/用户）。
 
-### [ ] H6. 图片 URL SSRF 风险
+### [x] H6. 图片 URL SSRF 风险 ✅ 已修复
 
 - **涉及文件**：`server/src/chat/router.py:51`、`server/src/chat/tools.py:471`、`server/src/services/qwen.py:66`
 - **问题描述**：用户通过 `ChatSendRequest.image_url` 或 AI 调用的 `analyze_food_image` 工具传入的 URL，被直接发送给 Qwen VL API 让服务端去抓取。攻击者可以传入 `http://169.254.169.254/`（云服务商 metadata 端点）或 `file:///etc/passwd` 等内网地址。
 - **影响**：云环境部署时可能泄露实例元数据（含临时凭证）；内网地址可能被探测。
 - **修复建议**：对传入的 URL 做白名单校验——仅允许 `https://` 协议的公网 URL，拒绝 `http://`、`file://`、私有 IP 段（10.x、172.16-31.x、192.168.x、127.x、169.254.x）。
+- **✅ 修复记录（2026-08-01）**：
+  - `qwen.py`：新增 `is_safe_image_url()` 校验（仅允许 https:// 公网 URL，拒绝 http/file/私有 IP/内网域名，OCR data URL 放行）；`analyze_food`/`parse_receipt` 入口强制校验
+  - `chat/tools.py`：`analyze_food_image` 工具提前校验并返回明确错误
+  - 测试：12 个 URL 场景全部通过（含 127.0.0.1/192.168.x/169.254.169.254 拦截）
 
-### [ ] H7. 未公开/未审核的食物可通过 ID 直接访问
+### [x] H7. 未公开/未审核的食物可通过 ID 直接访问 ✅ 已修复
 
 - **涉及文件**：`server/src/food/router.py:178`、`server/src/chat/tools.py:241`、`server/src/public_food/router.py:90-105`
 - **问题描述**：
@@ -156,13 +166,22 @@
   - `GET /api/public/recipes/{recipe_id}` 详情页不检查 `publish_status == "approved"`
 - **影响**：私密食谱、待审核 DIY 菜谱、被拒绝的投稿全部可被任意用户通过递增 ID 访问。
 - **修复建议**：在以上所有端点中增加 `is_public == True` 或 `publish_status == "approved"` 过滤条件，未匹配时返回 404。
+- **✅ 修复记录（2026-08-01）**：
+  - `food/router.py`：`GET /api/foods/{id}` 增加 `is_public==True` 过滤，未命中返回 404
+  - `public_food/router.py`：详情页增加 `is_published==True` 且 `publish_status==approved` 过滤
+  - `chat/tools.py`：`get_food_nutrition` 工具增加 `is_public==True` 过滤
+  - 测试：未公开食物(id=767)、未审核食谱(id=5) 均返回 404
 
-### [ ] H8. DeepSeek/Qwen 客户端无超时配置，请求可挂起长达 10 分钟
+### [x] H8. DeepSeek/Qwen 客户端无超时配置，请求可挂起长达 10 分钟 ✅ 已修复
 
 - **涉及文件**：`server/src/services/deepseek.py:27`、`server/src/services/qwen.py:23`
 - **问题描述**：`AsyncOpenAI` 客户端创建时未传 `timeout` 参数，openai 库默认超时为 600 秒。API 挂起时整个请求线程被阻塞达 10 分钟。
 - **影响**：AI API 故障时前端请求挂起不动，数据库连接池被长时间占用（`pool_size=10`），其它正常请求也被阻塞。
 - **修复建议**：创建 `AsyncOpenAI` 时传入 `timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)`。
+- **✅ 修复记录（2026-08-01）**：
+  - `deepseek.py`：主 client 增加 `timeout=httpx.Timeout(connect=10, read=60, write=10, pool=10)`
+  - `qwen.py`：client 增加相同 timeout（embed_client 已在 C1 修复时配置）
+  - 测试：三个 client 超时配置全部生效
 
 ### [ ] H9. OCR 返回非数字金额 → 500
 

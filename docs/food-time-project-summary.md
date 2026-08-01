@@ -1763,3 +1763,21 @@ card.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%) scale(
 **覆盖页面**：Assistant.vue（AI 对话 RAG 语义检索）
 
 **修复说明**：`embed()` 改用 Qwen/DashScope `text-embedding-v3`（复用 QWEN_API_KEY，零新增成本），内部按 10 条分批，向量维度 1536→1024，失败自动回退关键词检索。
+
+---
+
+### 测试 14 — 2026-08-01 P1 安全项修复（H6/H2/H7/H8/H3）
+
+| # | 测试内容 | 方式 | 结果 | 备注 |
+|---|---------|------|------|------|
+| 1 | H6 SSRF — `is_safe_image_url` 12 个 URL 场景 | P2 | ✅ | https 公网放行；http/file/私有 IP/内网域名拦截；OCR data URL 放行 |
+| 2 | H2 注册竞态 — 3 并发注册同一邮箱 | P2 | ✅ | 1 成功 + 2 duplicate，无 500 |
+| 3 | H7 越权 — 未公开食物/未审核食谱访问 | P0 | ✅ | `GET /api/foods/767` 与 `/api/public/recipes/5` 均返回 404 |
+| 4 | H8 超时 — 三个 AI client timeout 配置 | P0 | ✅ | connect 10s / read 60s / write 10s / pool 10s |
+| 5 | H3 种子 tags — 111 处字符串转 dict | P2 | ✅ | SAMPLE_FOODS / SAMPLE_RECIPES 全部为 dict |
+| 6 | 整体集成 — TestClient 启动完整应用 | P0 | ✅ | lifespan 正常，核心 API 全部 200 |
+
+**覆盖模块**：auth, food, chat, public_food, services(deepseek/qwen), seed  
+**覆盖页面**：Assistant.vue（AI 对话）、DIY.vue（保存）、Expense.vue（OCR 不受影响）
+
+**修复说明**：H6 图片 URL 白名单校验防 SSRF；H2 注册改用 `IntegrityError` 捕获防竞态；H7 未公开/未审核数据加访问过滤；H8 AI 客户端显式超时；H3 种子数据 tags 改 dict 格式。

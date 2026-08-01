@@ -238,7 +238,10 @@ async def execute_tool(
             if not food_name:
                 return "[错误] 请提供食物名称"
 
-            q = select(Food).where(Food.name.contains(food_name)).limit(1)
+            q = select(Food).where(
+                Food.name.contains(food_name),
+                Food.is_public == True,
+            ).limit(1)
             result = await db.execute(q)
             food = result.scalar_one_or_none()
 
@@ -461,7 +464,9 @@ async def execute_tool(
             if not image_url:
                 return "[错误] 请提供图片URL或base64数据"
 
-            from src.services.qwen import qwen_vl
+            from src.services.qwen import qwen_vl, is_safe_image_url
+            if not await is_safe_image_url(image_url):
+                return "[错误] 图片 URL 不合法：仅支持 https:// 公网图片链接或 base64 数据"
             if not qwen_vl.is_configured:
                 return (
                     "Qwen VL 视觉模型未配置（请在 .env 中填写 QWEN_API_KEY）。\n"

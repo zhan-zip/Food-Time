@@ -1,6 +1,6 @@
 """食物库模块 - API 路由（P0：基础搜索+详情 / P2：DIY食材接口）"""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
@@ -172,11 +172,14 @@ async def get_diy_ingredients(db: AsyncSession = Depends(get_db)):
 
 @router.get("/{food_id}")
 async def get_food(food_id: int, db: AsyncSession = Depends(get_db)):
-    """获取食物详情"""
-    result = await db.execute(select(Food).where(Food.id == food_id))
+    """获取食物详情（仅公开食物）"""
+    # 修复 H7：仅返回公开食物，未公开/不存在统一返回 404（原实现不检查 is_public，可越权访问）
+    result = await db.execute(
+        select(Food).where(Food.id == food_id, Food.is_public == True)
+    )
     food = result.scalar_one_or_none()
     if not food:
-        return {"error": "食物不存在"}
+        raise HTTPException(status_code=404, detail="食物不存在")
     return {
         "id": food.id,
         "name": food.name,
