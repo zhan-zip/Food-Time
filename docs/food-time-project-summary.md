@@ -1735,3 +1735,19 @@ card.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%) scale(
 **覆盖页面**：DIY.vue, SaveDialog.vue
 
 **修复说明**：`handleSubmit` 不再无条件跳 step2；`DIY.vue` 将 `doSave` 返回值经 `saveError` 传回；仅成功时跳转，失败时停留在填表页展示错误。
+
+---
+
+### 测试 13 — 2026-08-01 C1 RAG embedding 修复
+
+| # | 测试内容 | 方式 | 结果 | 备注 |
+|---|---------|------|------|------|
+| 1 | `embed` 真实调用 — 返回 1024 维语义向量 | P0 | ✅ | 全非零（原为零向量），DashScope text-embedding-v3 |
+| 2 | 语义相似度区分 — 番茄炒蛋 vs 西红柿炒鸡蛋 / 黑椒牛排 | P0 | ✅ | 0.84 vs 0.52（原零向量全相同） |
+| 3 | 完整 RAG 构建 + 语义搜索（60 条样本） | P0 | ✅ | 「番茄/宫保鸡丁/红烧肉」等召回正确，embedding=OK |
+| 4 | DashScope 批量限制处理 — 单次 ≤10 条自动分批 | P2 | ✅ | 修复 batch=50 超限导致 embedding 失败问题 |
+
+**覆盖模块**：services(deepseek, vector_store), chat(RAG)  
+**覆盖页面**：Assistant.vue（AI 对话 RAG 语义检索）
+
+**修复说明**：`embed()` 改用 Qwen/DashScope `text-embedding-v3`（复用 QWEN_API_KEY，零新增成本），内部按 10 条分批，向量维度 1536→1024，失败自动回退关键词检索。

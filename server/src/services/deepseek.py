@@ -4,6 +4,7 @@
 """
 
 from openai import AsyncOpenAI
+import httpx
 from src.config import settings
 
 
@@ -14,8 +15,10 @@ class DeepSeekClient:
         self.api_key = settings.DEEPSEEK_API_KEY
         self.base_url = settings.DEEPSEEK_BASE_URL
         self.model = settings.DEEPSEEK_MODEL
-        self.embed_model = "deepseek-chat"  # DeepSeek 暂无专用 embedding，用 chat 模型 proxy
+        # DeepSeek 官方不提供 embedding 端点，向量化复用 Qwen/DashScope text-embedding-v3
+        self.embed_model = "text-embedding-v3"
         self._client: AsyncOpenAI | None = None
+        self._embed_client: AsyncOpenAI | None = None
 
     @property
     def is_configured(self) -> bool:
@@ -29,6 +32,17 @@ class DeepSeekClient:
                 base_url=self.base_url,
             )
         return self._client
+
+    @property
+    def embed_client(self) -> AsyncOpenAI:
+        """向量化客户端：基于 Qwen/DashScope（DeepSeek 无 embedding 端点）"""
+        if self._embed_client is None:
+            self._embed_client = AsyncOpenAI(
+                api_key=settings.QWEN_API_KEY,
+                base_url=settings.QWEN_BASE_URL,
+                timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0),
+            )
+        return self._embed_client
 
     # ===========================================================
     # 对话 — 带工具调用（非流式，第一轮）
@@ -100,20 +114,29 @@ class DeepSeekClient:
     # Embedding — 用于 chromadb RAG 检索
     # ===========================================================
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        """将文本转为向量。用 /embeddings 端点"""
-        if not self.is_configured:
-            # fallback：返回零向量（维度 1536）
-            return [[0.0] * 1536 for _ in texts]
+        """将文本转为向量。使用 Qwen/DashScope text-embedding-v3（复用 QWEN_API_KEY）。
+
+        DeepSeek 官方不提供 embedding 端点，原实现用 deepseek-chat 调 /embeddings 必然失败，
+        导致 ChromaDB 全为零向量、语义检索无效（C1）。现改为 DashScope 的 text-embedding-v3，
+        失败时返回 1024 维零向量，由 vector_store 的关键词回退兜底。
+        """
+        if not settings.QWEN_API_KEY or settings.QWEN_API_KEY in ("sk-your-qwen-key", ""):
+            print("[Embed] QWEN_API_KEY 未配置，使用零向量 fallback")
+            return [[0.0] * 1024 for _ in texts]
         try:
-            resp = await self.client.embeddings.create(
-                model="deepseek-chat",  # DeepSeek 不提供专用 embedding，回退
-                input=texts,
-            )
-            return [d.embedding for d in resp.data]
-        except Exception:
-            # embedding 不可用时返回零向量
-            print("[DeepSeek] embed 不可用，使用零向量 fallback")
-            return [[0.0] * 1536 for _ in texts]
+            # DashScope text-embedding-v3 单次请求最多 10 条，内部自动分批
+            results: list[list[float]] = []
+            for i in range(0, len(texts), 10):
+                batch = texts[i:i + 10]
+                resp = await self.embed_client.embeddings.create(
+                    model=self.embed_model,
+                    input=batch,
+                )
+                results.extend([d.embedding for d in resp.data])
+            return results
+        except Exception as e:
+            print(f"[Embed] DashScope embedding 失败: {e}")
+            return [[0.0] * 1024 for _ in texts]
 
 
 deepseek = DeepSeekClient()

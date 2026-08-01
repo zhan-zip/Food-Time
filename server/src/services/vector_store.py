@@ -13,8 +13,8 @@ from chromadb.config import Settings as ChromaSettings
 CHROMA_PATH = "./chroma_data"
 COLLECTION_NAME = "foods"
 
-# 维度和距离函数
-EMBEDDING_DIM = 1536
+# 维度和距离函数（text-embedding-v3 输出 1024 维）
+EMBEDDING_DIM = 1024
 DISTANCE_FN = "cosine"
 
 
