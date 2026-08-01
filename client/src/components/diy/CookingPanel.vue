@@ -72,6 +72,11 @@
 
     <!-- 动画播放区 -->
     <div v-if="showAnimation" class="animation-area">
+      <!-- 倒计时提示（模拟烹饪） -->
+      <div class="countdown-tip" v-if="countdown > 0">
+        建议烹饪时间：{{ aiSuggestion?.cooking_time || '10 分钟' }} · 模拟倒计时 <strong>{{ countdown }}s</strong>
+      </div>
+      <div class="countdown-tip" v-else style="color:#52c41a">✨ 模拟烹饪结束，即将保存…</div>
       <!-- 炒锅动画 -->
       <div v-if="cookingMethod === 'wok'" class="anim-wok">
         <div class="wok-scene">
@@ -117,7 +122,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { ref, watch, onBeforeUnmount } from 'vue'
+
+const props = defineProps({
   stage: { type: String, default: 'selecting' },
   canSuggest: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
@@ -129,7 +136,32 @@ defineProps({
   showAnimation: { type: Boolean, default: false },
 })
 
-defineEmits(['suggest', 'cook', 'skip', 'select-method', 'skip-animation'])
+const emit = defineEmits(['suggest', 'cook', 'skip', 'select-method', 'skip-animation'])
+
+// 烹饪倒计时（模拟）：显示建议烹饪时间数字，固定 5 秒快速倒计时后自动进保存
+const countdown = ref(0)
+let _timer = null
+
+function startCountdown() {
+  countdown.value = 5
+  if (_timer) clearInterval(_timer)
+  _timer = setInterval(() => {
+    countdown.value -= 1
+    if (countdown.value <= 0) {
+      if (_timer) clearInterval(_timer)
+      _timer = null
+      emit('skip-animation')  // 模拟烹饪结束 → 自动进入保存
+    }
+  }, 1000)
+}
+
+watch(() => props.showAnimation, (v) => {
+  if (v) startCountdown()
+})
+
+onBeforeUnmount(() => {
+  if (_timer) clearInterval(_timer)
+})
 
 // 火焰粒子随机化
 function flameStyle(i) {
@@ -301,5 +333,6 @@ const steamParticles = Array.from({ length: 12 }, (_, i) => steamStyle(i + 1))
 }
 
 .anim-hint { font-size: var(--font-size-sm); color: var(--color-primary-dark); margin-top: 12px; font-weight: 500; }
+.countdown-tip { font-size: var(--font-size-sm); color: var(--color-primary-dark); margin-bottom: 8px; font-weight: 500; }
 .skip-btn { margin-top: 16px; font-size: 11px; }
 </style>

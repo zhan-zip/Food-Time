@@ -52,11 +52,11 @@ defineEmits(['click'])
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-color, #D9A15B) 30%, transparent);
 }
 .card-emoji {
-  font-size: 22px;
+  font-size: 44px;  /* 烹饪动画收尾：emoji 放大到 2 倍突出 */
   line-height: 1;
 }
 .card-name {
-  font-size: 11px;
+  font-size: 10px;  /* 文字相应缩小，突出 emoji */
   color: var(--color-text);
   line-height: 1.2;
   text-align: center;
