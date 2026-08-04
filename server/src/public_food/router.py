@@ -231,6 +231,47 @@ async def add_comment(
     }
 
 
+# ==================== 我的收藏列表 ====================
+@router.get("/favorites")
+async def get_my_favorites(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """当前用户收藏的食谱 id 列表（供前端初始化已收藏状态）"""
+    rows = await db.execute(
+        select(Favorite.recipe_id).where(Favorite.user_id == current_user.id)
+    )
+    return {"recipe_ids": list(rows.scalars())}
+
+
+@router.get("/favorites/recipes")
+async def get_my_favorite_recipes(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """当前用户收藏的食谱列表（含食物卡片信息，供 TodayEat 展示）"""
+    rows = await db.execute(
+        select(Food, FoodCategory.name, CustomRecipe.id)
+        .join(FoodCategory, Food.category_id == FoodCategory.id)
+        .join(CustomRecipe, CustomRecipe.food_id == Food.id)
+        .join(Favorite, Favorite.recipe_id == CustomRecipe.id)
+        .where(Favorite.user_id == current_user.id)
+        .order_by(Favorite.id.desc())
+    )
+    items = []
+    for f, cat_name, recipe_id in rows.all():
+        items.append({
+            "id": f.id,
+            "recipe_id": recipe_id,
+            "name": f.name,
+            "cuisine": f.cuisine,
+            "category_name": cat_name or "",
+            "calories_per_100g": float(f.calories_per_100g) if f.calories_per_100g else None,
+            "has_recipe": True,
+        })
+    return {"items": items}
+
+
 # ==================== 收藏到个人食物库 ====================
 
 @router.post("/recipes/{recipe_id}/save")

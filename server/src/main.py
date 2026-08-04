@@ -116,6 +116,14 @@ app.include_router(diet_router)
 app.include_router(expense_router)
 app.include_router(admin_router)
 
+# ========== 静态文件（AI 生成菜品图） ==========
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
 
 @app.get("/")
 async def root():

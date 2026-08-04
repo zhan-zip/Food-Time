@@ -21,6 +21,14 @@ export function saveRecipe(recipeId) {
   return request.post(`/public/recipes/${recipeId}/save`)
 }
 
+export function getFavorites() {
+  return request.get('/public/favorites')
+}
+
+export function getFavoriteRecipes() {
+  return request.get('/public/favorites/recipes')
+}
+
 export function unsaveRecipe(recipeId) {
   return request.delete(`/public/recipes/${recipeId}/save`)
 }

@@ -44,6 +44,14 @@
             <span>&#x2764; {{ r.like_count }}</span>
             <span>&#x2B50; {{ r.fav_count }}</span>
           </div>
+          <button
+            class="btn save-quick-btn"
+            :class="savedIds.has(r.id) ? 'saved' : 'btn-outline'"
+            @click.stop="quickSave(r)"
+            :disabled="savingIds.has(r.id)"
+          >
+            {{ savedIds.has(r.id) ? '✓ 已收录' : '📥 收录进我的食谱' }}
+          </button>
         </div>
       </div>
     </div>
@@ -56,9 +64,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getRecipes } from '../api/public'
+import { getRecipes, saveRecipe, getFavorites } from '../api/public'
 import FoodImage from '../components/FoodImage.vue'
 
 const router = useRouter()
@@ -71,6 +79,24 @@ const cuisines = ref([])
 
 function goDetail(id) {
   router.push('/square/' + id)
+}
+
+// 快速收录进我的食谱（卡片快捷按钮）
+const savedIds = reactive(new Set())
+const savingIds = reactive(new Set())
+
+async function quickSave(r) {
+  if (savedIds.has(r.id) || savingIds.has(r.id)) return
+  savingIds.add(r.id)
+  try {
+    await saveRecipe(r.id)
+    savedIds.add(r.id)
+    if (r.fav_count !== undefined) r.fav_count++
+  } catch (e) {
+    alert('收录失败：' + (e.message || '请重试'))
+  } finally {
+    savingIds.delete(r.id)
+  }
 }
 
 function switchSort(by) {
@@ -102,7 +128,18 @@ async function fetchRecipes() {
   }
 }
 
-onMounted(fetchRecipes)
+// 加载当前用户已收藏的食谱 id，初始化「已收录」状态
+async function loadFavorites() {
+  try {
+    const res = await getFavorites()
+    ;(res.recipe_ids || []).forEach(id => savedIds.add(id))
+  } catch { /* 未登录或失败时忽略 */ }
+}
+
+onMounted(() => {
+  loadFavorites()
+  fetchRecipes()
+})
 </script>
 
 <style scoped>
@@ -199,6 +236,17 @@ onMounted(fetchRecipes)
   display: flex;
   gap: var(--spacing-md);
   margin-top: var(--spacing-sm);
+}
+.save-quick-btn {
+  width: 100%;
+  margin-top: var(--spacing-sm);
+  font-size: 13px;
+  padding: 6px 0;
+}
+.save-quick-btn.saved {
+  border-color: #52c41a;
+  color: #52c41a;
+  background: rgba(82, 196, 26, 0.06);
 }
 @media (max-width: 768px) {
   .square-grid {

@@ -255,6 +255,13 @@ async def save_recipe(
 
     await db.commit()
 
+    # 后台生成 AI 配图（无本地图时异步生成，不阻塞保存响应）
+    import asyncio as _asyncio
+
+    from src.services.image_gen import generate_and_save as _gen_img
+
+    _asyncio.create_task(_gen_img(body.name))
+
     return {
         "success": True,
         "id": recipe.id,

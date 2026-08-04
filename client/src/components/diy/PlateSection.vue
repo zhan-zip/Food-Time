@@ -101,25 +101,36 @@ onBeforeUnmount(() => {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  padding: 6px 10px;
+  width: 68px;
+  height: 78px;
+  padding: 6px 4px;
   background: var(--color-bg-card);
   border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: var(--font-size-xs);
+  overflow: hidden;
 }
 .plate-item:hover {
   border-color: #e74c3c;
   background: rgba(231, 76, 60, 0.06);
 }
 .pi-emoji {
-  font-size: 18px;
+  font-size: 44px;
+  line-height: 1;
 }
 .pi-name {
   font-size: 10px;
   color: var(--color-text);
+  line-height: 1.2;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 .plate-info {
   display: flex;

@@ -10,6 +10,7 @@ from typing import Optional
 from src.config import settings
 from src.database import get_db
 from src.food.models import Food, FoodCategory
+from src.custom_food.models import CustomRecipe
 from src.services.ingredient_emoji import (
     FRIDGE_CATEGORIES, SEASONING_CATEGORY,
     FRIDGE_LEFT_KEYS, FRIDGE_RIGHT_KEYS,
@@ -65,6 +66,12 @@ async def search_foods(
     result = await db.execute(query)
     foods = result.scalars().all()
 
+    # 食物 → 食谱记录映射（DIY/广场食谱），供前端判断可进详情 + 跳转广场详情页
+    recipe_map_rows = await db.execute(
+        select(CustomRecipe.food_id, CustomRecipe.id).where(CustomRecipe.food_id.isnot(None))
+    )
+    recipe_map = dict(recipe_map_rows.all())
+
     return {
         "total": total,
         "page": page,
@@ -82,6 +89,8 @@ async def search_foods(
                 "fat_per_100g": float(f.fat_per_100g) if f.fat_per_100g else None,
                 "carbs_per_100g": float(f.carbs_per_100g) if f.carbs_per_100g else None,
                 "source": f.source,
+                "has_recipe": f.id in recipe_map,
+                "recipe_id": recipe_map.get(f.id),
                 "view_count": f.view_count,
             }
             for f in foods
@@ -175,6 +184,72 @@ async def get_diy_ingredients(db: AsyncSession = Depends(get_db)):
 # ============================================================
 # 菜品图片代理（Pixabay）：Key 仅存服务端 .env，不暴露前端
 # ============================================================
+# 中文菜名 → Pixabay 英文关键词映射（Pixabay 英文搜索更准，避免中文菜名搜出不相关图）
+FOOD_IMAGE_MAP = {
+    "番茄炒蛋": "tomato scrambled egg",
+    "西红柿炒鸡蛋": "tomato scrambled egg",
+    "宫保鸡丁": "kung pao chicken",
+    "黑椒牛排": "beef steak",
+    "牛排": "beef steak",
+    "红烧肉": "braised pork",
+    "红烧排骨": "braised pork ribs",
+    "麻婆豆腐": "mapo tofu",
+    "水煮鱼": "spicy fish",
+    "酸菜鱼": "pickled fish",
+    "糖醋里脊": "sweet and sour pork",
+    "鱼香肉丝": "yuxiang shredded pork",
+    "回锅肉": "twice cooked pork",
+    "辣子鸡": "spicy chicken",
+    "可乐鸡翅": "cola chicken wings",
+    "咖喱鸡": "curry chicken",
+    "清蒸鱼": "steamed fish",
+    "烤鱼": "grilled fish",
+    "炸鸡": "fried chicken",
+    "蒸蛋": "steamed egg",
+    "炒蛋": "scrambled egg",
+    "土豆丝": "shredded potato",
+    "炒青菜": "stir fried greens",
+    "青椒炒肉": "green pepper pork",
+    "寿司": "sushi",
+    "拉面": "ramen",
+    "日式味噌汤": "miso soup",
+    "味噌汤": "miso soup",
+    "饺子": "dumplings",
+    "包子": "steamed bun",
+    "小笼包": "xiao long bao",
+    "炒饭": "fried rice",
+    "炒面": "chow mein",
+    "火锅": "hot pot",
+    "麻辣烫": "mala tang",
+    "披萨": "pizza",
+    "意面": "pasta",
+    "三明治": "sandwich",
+    "沙拉": "salad",
+    "蛋糕": "cake",
+    "奶茶": "milk tea",
+    "冰淇淋": "ice cream",
+    "蛋挞": "egg tart",
+    "春卷": "spring rolls",
+    "油条": "youtiao",
+    "皮蛋瘦肉粥": "congee",
+    "馒头": "mantou",
+    "烧鹅": "roast goose",
+    "烤鸭": "roast duck",
+    "煎饼果子": "chinese crepe",
+    "臭豆腐": "stinky tofu",
+    "豆腐": "tofu",
+    "毛血旺": "spicy hot pot",
+    "酸辣粉": "hot and sour noodles",
+    "牛肉面": "beef noodles",
+    "兰州拉面": "beef noodles",
+}
+
+
+def _image_query(name: str) -> str:
+    """中文菜名 → 英文关键词（Pixabay 英文搜索更准）；无映射则原样返回"""
+    return FOOD_IMAGE_MAP.get(name, name)
+
+
 _image_cache: dict[str, str] = {}
 
 
@@ -184,6 +259,8 @@ async def food_image(query: str = Query("", description="食物名")):
     query = query.strip()
     if not query:
         return {"url": None}
+    # 中文菜名映射为英文关键词（Pixabay 英文搜索更准）
+    search_q = _image_query(query)
     if query in _image_cache:
         return {"url": _image_cache[query] or None}
     if not settings.PIXABAY_API_KEY:
@@ -192,11 +269,10 @@ async def food_image(query: str = Query("", description="食物名")):
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get("https://pixabay.com/api/", params={
                 "key": settings.PIXABAY_API_KEY,
-                "q": query,
+                "q": search_q,
                 "image_type": "photo",
                 "per_page": 3,
                 "safesearch": True,
-                "lang": "zh",
             })
             hits = (r.json().get("hits") or [])
             if hits:

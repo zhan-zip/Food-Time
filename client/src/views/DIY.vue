@@ -8,59 +8,9 @@
       <button class="guide-close">&times;</button>
     </div>
 
-    <!-- 桌面/平板布局 -->
+    <!-- 桌面/平板布局：冰箱(3份) + 备菜盘(1份) -->
     <div class="diy-desktop">
-      <div class="diy-left">
-        <!-- 备菜盘 -->
-        <PlateSection
-          ref="plateRef"
-          :items="store.plate"
-          :max="store.MAX_PLATE"
-          @remove="store.removeFromPlate"
-          @clear="store.clearPlate"
-        />
-
-        <!-- 烹饪面板（建议结果 + 动画） -->
-        <CookingPanel
-          :stage="store.stage"
-          :can-suggest="store.canSuggest"
-          :loading="store.stage === 'suggesting'"
-          :ai-suggestion="store.aiSuggestion"
-          :matched-recipes="store.matchedRecipes"
-          :suggest-error="store.suggestError"
-          :cooking-method="store.cookingMethod"
-          :cooking-methods="store.cookingMethods"
-          :show-animation="store.showAnimation"
-          @suggest="store.fetchSuggestion()"
-          @cook="store.startCooking()"
-          @skip="store.skipAnimation()"
-          @select-method="v => store.cookingMethod = v"
-          @skip-animation="store.skipAnimation()"
-        />
-
-        <!-- 烹饪完成 → 保存提示 -->
-        <div v-if="store.stage === 'saving' || store.stage === 'done'" class="card save-prompt">
-          <template v-if="store.stage === 'saving'">
-            <p class="text-sm">烹饪完成！要保存这道菜吗？</p>
-            <button class="btn btn-primary" @click="store.openSaveDialog()">💾 保存菜谱</button>
-          </template>
-          <template v-else>
-            <p class="text-sm" style="color:#52c41a">{{ store.lastSavedRecipe?.message || '菜谱已保存' }}</p>
-            <div class="done-actions">
-              <button class="btn btn-outline" @click="store.clearPlate()">🔄 再做一道</button>
-              <button
-                v-if="!store.lastSavedRecipe?.published"
-                class="btn btn-primary"
-                @click="handlePublishFromDone"
-              >
-                📤 发布到广场
-              </button>
-            </div>
-          </template>
-        </div>
-      </div>
-
-      <div class="diy-right">
+      <div class="diy-fridge">
         <!-- 冰箱 -->
         <FridgeSection
           :open="store.fridgeOpen"
@@ -85,6 +35,17 @@
             @select="(item, catKey, type, e) => onIngredientSelect(item, type, e)"
           />
         </div>
+      </div>
+
+      <div class="diy-plate">
+        <!-- 备菜盘 -->
+        <PlateSection
+          ref="plateRef"
+          :items="store.plate"
+          :max="store.MAX_PLATE"
+          @remove="store.removeFromPlate"
+          @clear="store.clearPlate"
+        />
       </div>
     </div>
 
@@ -131,58 +92,16 @@
           @remove="store.removeFromPlate"
           @clear="store.clearPlate"
         />
-        <button
-          v-if="store.canSuggest && store.plate.length > 0"
-          class="btn btn-primary"
-          style="width:100%"
-          :disabled="store.stage === 'suggesting'"
-          @click="store.fetchSuggestion()"
-        >
-          {{ store.stage === 'suggesting' ? 'AI 分析中...' : '🤖 获取 AI 烹饪建议' }}
-        </button>
-        <div v-if="store.hasMatchedRecipes && store.stage !== 'selecting'" class="match-tip" style="margin-top:8px">
-          📋 发现 {{ store.matchedRecipes.length }} 道相似菜谱
-        </div>
       </div>
 
-      <!-- Tab: 烹饪 -->
-      <div v-show="mobileTab === 'cooking'" class="mobile-panel">
-        <CookingPanel
-          :stage="store.stage"
-          :can-suggest="store.canSuggest"
-          :loading="store.stage === 'suggesting'"
-          :ai-suggestion="store.aiSuggestion"
-          :matched-recipes="store.matchedRecipes"
-          :suggest-error="store.suggestError"
-          :cooking-method="store.cookingMethod"
-          :cooking-methods="store.cookingMethods"
-          :show-animation="store.showAnimation"
-          @suggest="store.fetchSuggestion()"
-          @cook="store.startCooking()"
-          @skip="store.skipAnimation()"
-          @select-method="v => store.cookingMethod = v"
-          @skip-animation="store.skipAnimation()"
-        />
-        <div v-if="store.stage === 'saving' || store.stage === 'done'" style="margin-top:12px; text-align:center">
-          <template v-if="store.stage === 'saving'">
-            <button class="btn btn-primary" @click="store.openSaveDialog()">💾 保存菜谱</button>
-          </template>
-          <template v-else>
-            <p class="text-sm" style="color:#52c41a">{{ store.lastSavedRecipe?.message || '菜谱已保存' }}</p>
-            <div class="done-actions" style="justify-content:center">
-              <button class="btn btn-outline" @click="store.clearPlate()">🔄 再做一道</button>
-              <button
-                v-if="!store.lastSavedRecipe?.published"
-                class="btn btn-primary"
-                @click="handlePublishFromDone"
-              >
-                📤 发布到广场
-              </button>
-            </div>
-          </template>
-        </div>
+      <!-- Tab: AI 烹饪助手（对话框面板，仅本 Tab 显示） -->
+      <div v-show="mobileTab === 'ai'" class="mobile-panel">
+        <AiPanel @publish-done="handlePublishFromDone" />
       </div>
     </div>
+
+    <!-- 桌面端 AI 面板（≥769px 显示，移动端隐藏） -->
+    <AiPanel class="desktop-ai" @publish-done="handlePublishFromDone" />
 
     <!-- 保存弹窗 -->
     <SaveDialog
@@ -210,6 +129,7 @@ import PlateSection from '@/components/diy/PlateSection.vue'
 import SeasoningRack from '@/components/diy/SeasoningRack.vue'
 import CookingPanel from '@/components/diy/CookingPanel.vue'
 import SaveDialog from '@/components/diy/SaveDialog.vue'
+import AiPanel from '@/components/diy/AiPanel.vue'
 
 const store = useDIYStore()
 const plateRef = ref(null)
@@ -221,9 +141,9 @@ const showGuide = ref(false)
 // 移动端 Tab
 const mobileTab = ref('fridge')
 const mobileTabs = [
-  { key: 'fridge', label: '冰箱', icon: '🧊' },
+  { key: 'fridge', label: '食材区', icon: '🧊' },
   { key: 'plate', label: '备菜盘', icon: '🍽️' },
-  { key: 'cooking', label: '烹饪', icon: '🍳' },
+  { key: 'ai', label: 'AI 烹饪助手', icon: '🤖' },
 ]
 
 onMounted(async () => {
@@ -238,19 +158,36 @@ onMounted(async () => {
  * 创建飞行克隆卡片：从 sourceEl 位置沿弧线飞到备菜盘
  * 动画阶段：拾取放大 → 弧线飞行 → 弹跳到达 → 淡出消失
  */
+/**
+ * 飞行动画目标：
+ * - 桌面布局：备菜盘（PlateSection 可见，width > 0）
+ * - 移动端（备菜盘被 Tab 隐藏、尺寸为 0）→ 飞到「备菜盘」Tab 按钮
+ */
+function getFlyTarget() {
+  const plateEl = plateRef.value?.$el || document.querySelector('.plate-section')
+  if (plateEl && plateEl.getBoundingClientRect().width > 0) {
+    return plateEl
+  }
+  const tabBtn = Array.from(document.querySelectorAll('.mobile-tab-btn')).find(
+    (b) => b.innerText.includes('备菜盘')
+  )
+  return tabBtn || plateEl || null
+}
+
 function createFlyingCard(item, sourceEl) {
   if (!sourceEl) {
     console.debug('[Fly] sourceEl 为空，跳过飞行动画')
     return
   }
-  const plateEl = plateRef.value?.$el || document.querySelector('.plate-section')
-  if (!plateEl) {
-    console.debug('[Fly] 找不到备菜盘元素')
+  // 飞行目标：桌面取备菜盘；移动端备菜盘不可见 → 飞到「备菜盘」Tab 按钮
+  const target = getFlyTarget()
+  if (!target) {
+    console.debug('[Fly] 找不到飞行目标元素')
     return
   }
 
   const from = sourceEl.getBoundingClientRect()
-  const to = plateEl.getBoundingClientRect()
+  const to = target.getBoundingClientRect()
 
   // 起点/终点中心坐标
   const sx = from.left + from.width / 2
@@ -438,13 +375,73 @@ async function handlePublishFromDone() {
   display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px;
 }
 
-/* ==================== 桌面/平板布局 ==================== */
-@media (min-width: 641px) {
+/* AI 建议区：对话框式大面板 */
+.ai-panel {
+  margin-top: var(--spacing-lg);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.ai-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--color-divider);
+  background: linear-gradient(135deg, rgba(217, 161, 91, 0.10), rgba(217, 161, 91, 0.03));
+}
+.ai-head-avatar { font-size: 22px; line-height: 1; }
+.ai-head-title { font-size: 15px; font-weight: 600; color: var(--color-text); }
+.ai-head-tag {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(217, 161, 91, 0.15);
+  color: var(--color-primary-dark);
+}
+.ai-panel-body {
+  padding: 28px 24px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.ai-welcome {
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+.ai-welcome-icon { font-size: 44px; display: block; margin-bottom: 12px; }
+.ai-welcome-text { font-size: 15px; line-height: 1.6; }
+
+/* ==================== 桌面布局（≥769px，对齐全局 768 断点） ==================== */
+@media (min-width: 769px) {
   .diy-desktop {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 3fr) minmax(240px, 1fr);
     gap: var(--spacing-lg);
     align-items: start;
+  }
+  .diy-fridge, .diy-plate {
+    min-width: 0;
+  }
+  /* 备菜盘高度：上跟冰箱顶、下跟调料台底 */
+  .diy-plate {
+    align-self: stretch;
+  }
+  .diy-plate :deep(.plate-section) {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+  }
+  .diy-plate :deep(.plate-area) {
+    flex: 1;
+    min-height: 220px;
+  }
+  .diy-plate :deep(.plate-items-inner) {
+    align-content: flex-start;
   }
   .diy-mobile-tabs,
   .diy-mobile-content {
@@ -452,9 +449,12 @@ async function handlePublishFromDone() {
   }
 }
 
-/* ==================== 移动端 Tab ==================== */
-@media (max-width: 640px) {
+/* ==================== 移动端/平板 Tab（≤768px） ==================== */
+@media (max-width: 768px) {
   .diy-desktop {
+    display: none;
+  }
+  .desktop-ai {
     display: none;
   }
   .diy-mobile-tabs {
@@ -489,12 +489,7 @@ async function handlePublishFromDone() {
   }
 }
 
-/* ==================== 平板中等屏 ==================== */
-@media (min-width: 641px) and (max-width: 900px) {
-  .diy-desktop {
-    grid-template-columns: 1fr;
-  }
-}
+/* 769px 以上桌面 3fr:1fr；≤768px 移动端 Tab */
 </style>
 
 <!-- 飞行克隆卡片：全局样式（挂载到 document.body） -->

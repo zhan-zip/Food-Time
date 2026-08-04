@@ -1,9 +1,8 @@
 <template>
   <div class="page-home">
-    <!-- Banner 轮播区 -->
+    <!-- Banner：整张美食图做背景，文字叠图 + 底部过渡渐变（图与背景融为一体） -->
     <section class="hero-banner">
       <div class="hero-slide container">
-        <span class="hero-emoji">🍽️</span>
         <div class="hero-text">
           <h1>今天吃什么？</h1>
           <p class="hero-desc">食光记 — AI 驱动的智能饮食助手，帮您解决每一刻的选择困难</p>
@@ -42,19 +41,6 @@
       </div>
     </section>
 
-    <!-- 功能介绍 -->
-    <section class="page-section" style="background: var(--color-bg-warm);">
-      <div class="container">
-        <h2 class="section-title">怎么用食光记</h2>
-        <div class="feature-grid">
-          <div class="card feature-card" v-for="(f, i) in features" :key="i">
-            <span class="feature-icon">{{ f.icon }}</span>
-            <h3>{{ f.title }}</h3>
-            <p class="text-sm text-secondary">{{ f.desc }}</p>
-          </div>
-        </div>
-      </div>
-    </section>
   </div>
 </template>
 
@@ -62,15 +48,6 @@
 import { ref, onMounted } from 'vue'
 import { getRecipes } from '../api/public'
 import FoodImage from '../components/FoodImage.vue'
-
-const features = [
-  { icon: '\u{1F50D}', title: '食物决策', desc: '筛选、转盘、AI推荐，三种方式帮你快速决定吃什么' },
-  { icon: '\u{1F52A}', title: '我的厨房', desc: '拖拽食材制作自定义食谱，AI 提供专业烹饪建议' },
-  { icon: '\u{1F30D}', title: '美食广场', desc: '分享你的创意食谱，发现他人的美味灵感' },
-  { icon: '\u{1F4B0}', title: '智能记账', desc: '手动录入或拍照识别账单，自动生成消费图表' },
-  { icon: '\u{1F916}', title: 'AI 助手', desc: '多轮对话，长期记忆，随时提供饮食分析和建议' },
-  { icon: '\u{1F4CA}', title: '营养分析', desc: '记录每日饮食，雷达图和柱状图展示营养摄入趋势' },
-]
 
 // 视觉美化：每日推荐取广场最近 3 个已审核菜谱（替代静态占位）
 const recommended = ref([])
@@ -89,39 +66,61 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Banner */
+/* Banner：整张美食图做背景，文字叠图 + 底部过渡渐变（图与背景融为一体） */
 .hero-banner {
-  background: linear-gradient(135deg, #D9A15B 0%, #D8B08C 40%, #F5EDE3 100%);
-  padding: 60px 0;
+  min-height: 620px;
+  display: flex;
+  align-items: flex-end;
+  padding: 48px 0 44px;
+  background:
+    linear-gradient(180deg, rgba(20, 10, 5, 0) 42%, rgba(20, 10, 5, 0.28) 65%, rgba(20, 10, 5, 0.84) 100%),
+    url('/static/hero-dish.png');
+  background-size: cover;
+  background-position: center;
 }
 .hero-slide {
-  text-align: center;
-  position: relative;
+  width: 100%;
 }
-.hero-emoji {
-  display: block;
-  font-size: 72px;
-  margin-bottom: 8px;
-  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.12));
+.hero-text {
+  max-width: 560px;
 }
 .hero-text h1 {
-  font-size: var(--font-size-3xl);
-  font-weight: 800;
-  color: var(--color-text);
+  font-family: "Songti SC", "SimSun", "STSong", Georgia, serif;
+  font-size: 56px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.15;
   margin-bottom: 12px;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .hero-desc {
   font-size: var(--font-size-lg);
-  color: var(--color-text-secondary);
-  max-width: 480px;
-  margin: 0 auto 24px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 24px;
   line-height: 1.7;
 }
 .hero-actions {
   display: flex;
   gap: var(--spacing-md);
-  justify-content: center;
   flex-wrap: wrap;
+}
+/* 图上：白色按钮，高对比 */
+.hero-actions .btn-primary {
+  background: #fff;
+  color: #241510;
+  border: 1px solid #fff;
+  font-weight: 600;
+}
+.hero-actions .btn-primary:hover {
+  background: #F5EDE3;
+}
+.hero-actions .btn-outline {
+  border-color: rgba(255, 255, 255, 0.85);
+  color: #fff;
+}
+.hero-actions .btn-outline:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 /* 每日推荐 */
@@ -159,35 +158,26 @@ onMounted(async () => {
   margin-bottom: var(--spacing-sm);
 }
 
-/* 功能介绍 */
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-lg);
-}
-.feature-card {
-  text-align: center;
-}
-.feature-icon {
-  font-size: 36px;
-  margin-bottom: var(--spacing-sm);
-  display: block;
-}
-.feature-card h3 {
-  font-size: var(--font-size-base);
-  font-weight: 600;
-  margin-bottom: var(--spacing-xs);
-}
-
 @media (max-width: 768px) {
   .hero-banner {
-    padding: 40px 0;
+    min-height: 480px;
+    padding: 32px 0 28px;
+  }
+  .hero-text {
+    max-width: 100%;
+    text-align: center;
+  }
+  .hero-desc {
+    margin: 0 auto 20px;
+  }
+  .hero-actions {
+    justify-content: center;
   }
   .hero-text h1 {
-    font-size: var(--font-size-2xl);
+    font-size: 40px;
+    letter-spacing: 1px;
   }
-  .recommend-grid,
-  .feature-grid {
+  .recommend-grid {
     grid-template-columns: 1fr;
   }
 }

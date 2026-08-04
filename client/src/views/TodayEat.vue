@@ -8,7 +8,7 @@
         &#x1F50D; 搜索浏览
       </button>
       <button class="tab-btn" :class="{ active: tab === 'decide' }" @click="tab = 'decide'">
-        &#x1F3AF; 智能决策
+        &#x1F3AF; 辅助决策
       </button>
     </div>
 
@@ -25,10 +25,28 @@
         <button class="btn btn-primary" @click="search">搜索</button>
       </div>
 
+      <!-- 快捷筛选（独立明显按钮） -->
+      <div class="custom-filter-bar">
+        <button
+          class="btn custom-btn"
+          :class="viewMode === 'diy' ? 'btn-primary' : 'btn-outline'"
+          @click="toggleCustom"
+        >
+          🍳 只看我的 DIY 菜谱
+        </button>
+        <button
+          class="btn custom-btn"
+          :class="viewMode === 'fav' ? 'btn-primary' : 'btn-outline'"
+          @click="toggleFav"
+        >
+          ⭐ 我收藏的食谱
+        </button>
+      </div>
+
       <!-- 分类筛选 -->
       <div class="filter-tags">
         <button
-          v-for="cat in categories"
+          v-for="cat in normalCategories"
           :key="cat.id"
           class="tag"
           :class="selectedCat === cat.id ? 'tag-primary' : 'tag-default'"
@@ -40,20 +58,14 @@
         <button class="tag tag-default" style="cursor: pointer" @click="selectCategory(null)">全部</button>
       </div>
 
-      <!-- 决策快捷入口 -->
-      <div class="decision-actions">
-        <button class="btn btn-outline" @click="tab='decide'">&#x1F3B0; 随机转盘</button>
-        <button class="btn btn-outline" @click="tab='decide'">&#x1F50D; 高级筛选</button>
-      </div>
-
       <!-- 结果列表 -->
       <div v-if="loading" class="text-center text-muted" style="padding: 40px 0">搜索中...</div>
       <div v-else-if="foods.length === 0" class="text-center text-muted" style="padding: 40px 0">
         暂无结果，试试其他关键词
       </div>
       <div v-else class="food-grid">
-        <div class="card food-card" v-for="food in foods" :key="food.id">
-          <div class="food-card-img">&#x1F372;</div>
+        <div class="card food-card" v-for="food in foods" :key="food.id" :class="{ 'can-click': food.has_recipe }" @click="food.has_recipe && goDetail(food)">
+          <div class="food-card-img"><FoodImage :name="food.name" :use-pixabay="false" /></div>
           <div class="food-card-body">
             <h3>{{ food.name }}</h3>
             <p class="text-sm text-secondary">{{ food.cuisine || '通用' }}</p>
@@ -61,7 +73,7 @@
               <span class="tag tag-default">{{ food.category_name }}</span>
               <span class="text-xs text-muted">{{ food.calories_per_100g || 0 }} kcal/100g</span>
             </div>
-            <button class="btn btn-primary btn-sm" style="width:100%; margin-top:10px" @click="openRecordModal(food)">
+            <button class="btn btn-primary btn-sm" style="width:100%; margin-top:10px" @click.stop="openRecordModal(food)">
               我吃了这个
             </button>
           </div>
@@ -69,12 +81,10 @@
       </div>
     </div>
 
-    <!-- ====== Tab 2: 智能决策 ====== -->
-    <div v-show="tab === 'decide'" class="decide-layout">
-      <!-- 左栏：筛选条件 + AI推荐 -->
-      <div class="decide-left">
-        <!-- 筛选条件面板 FR-21 -->
-        <div class="card decide-card">
+    <!-- ====== Tab 2: 辅助决策 ====== -->
+    <div v-show="tab === 'decide'" class="decide-stack">
+      <!-- ① 筛选条件 FR-21 -->
+      <div class="card decide-card">
           <h3 class="decide-card-title">&#x1F4CB; 筛选条件</h3>
 
           <div class="form-group">
@@ -130,10 +140,19 @@
           <h3 class="decide-card-title">&#x1F4CD; 附近美食</h3>
           <p v-if="nearbyCity" class="text-sm text-secondary" style="margin-bottom:12px">
             你的城市：<strong>{{ nearbyCity }}</strong>
+            <span
+              class="city-edit-link"
+              style="cursor:pointer; margin-left:6px; color:var(--color-primary);"
+              @click="manualCityMode = !manualCityMode"
+            >或许你想换个定位</span>
           </p>
           <p v-else class="text-sm text-muted" style="margin-bottom:12px">
             正在定位...
           </p>
+          <div v-if="manualCityMode" style="display:flex; gap:8px; margin-bottom:10px">
+            <input v-model="nearbyCityInput" class="input input-sm" placeholder="输入城市名，如：枣庄" @keyup.enter="setManualCity" style="flex:1" />
+            <button class="btn btn-primary btn-sm" @click="setManualCity">确定</button>
+          </div>
           <button class="btn btn-outline btn-sm" style="width:100%" :disabled="nearbyLoading" @click="getNearbyRecommend">
             {{ nearbyLoading ? '查询中...' : '查看当地特色菜推荐' }}
           </button>
@@ -141,12 +160,10 @@
             <div class="nearby-result-text">{{ nearbyResult }}</div>
           </div>
         </div>
-      </div>
 
-      <!-- 右栏：转盘 FR-22 -->
-      <div class="decide-right">
+        <!-- ③ 随机转盘 FR-22 -->
         <div class="card decide-card" style="text-align:center">
-          <h3 class="decide-card-title">&#x1F3B0; 决策转盘</h3>
+          <h3 class="decide-card-title">&#x1F3B0; 随机转盘</h3>
 
           <!-- 自定义添加食物 -->
           <div class="wheel-add-row">
@@ -203,7 +220,6 @@
               &#x1F5D1; 清空
             </button>
           </div>
-        </div>
       </div>
     </div>
 
@@ -249,7 +265,10 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 import { createDietRecord } from '@/api/diet'
+import { getFavoriteRecipes } from '@/api/public'
 import SpinWheel from '@/components/today/SpinWheel.vue'
+import FoodImage from '@/components/FoodImage.vue'
+import { useRouter } from 'vue-router'
 
 // ====== Tab ======
 const tab = ref('search')
@@ -257,6 +276,7 @@ const tab = ref('search')
 // ====== 搜索状态 ======
 const keyword = ref('')
 const selectedCat = ref(null)
+const viewMode = ref('all')  // 'all' | 'diy' | 'fav'
 const foods = ref([])
 const categories = ref([])
 const allCuisineOptions = ref([])
@@ -311,12 +331,107 @@ function clearWheel() {
 }
 
 // ====== 附近美食 FR-24 ======
+const router = useRouter()
+function goDetail(food) {
+  // 有食谱数据 → 统一跳广场食谱详情页（含食材/步骤/评论/收藏）
+  if (food.recipe_id) {
+    router.push('/square/' + food.recipe_id)
+  } else {
+    router.push({ path: '/food/' + food.id, query: { cat: food.category_name || '' } })
+  }
+}
+
 const nearbyCity = ref('')
 const nearbyLoading = ref(false)
 const nearbyResult = ref('')
+const manualCityMode = ref(false)
+const nearbyCityInput = ref('')
 
-// 页面加载时 IP 定位（高德优先 → 返回中文城市名）
+// HTML5 精准定位（GPS/WiFi/基站）→ 高德逆地理编码得到城市；失败/拒绝返回空
+function geoLocate() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve('')
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { longitude, latitude } = pos.coords
+          const r = await fetch(
+            `https://restapi.amap.com/v3/geocode/regeo?location=${longitude},${latitude}&key=38b348fb67f2d42cb1fa0fe61301bc45`,
+            { signal: AbortSignal.timeout(5000) }
+          )
+          if (!r.ok) {
+            resolve('')
+            return
+          }
+          const d = await r.json()
+          const comp = d.regeocode?.addressComponent
+          const city = comp?.city || comp?.province || ''
+          resolve(String(city).replace(/市$|省$/, '') || '')
+        } catch {
+          resolve('')
+        }
+      },
+      () => resolve(''),  // 用户拒绝/超时 → 回退 IP
+      { timeout: 8000, maximumAge: 60000 }
+    )
+  })
+}
+
+// 高德 JS SDK 动态加载（复用现有 key）
+let _amapReady = null
+function loadAMapScript() {
+  if (window.AMap) return Promise.resolve()
+  if (!_amapReady) {
+    _amapReady = new Promise((resolve, reject) => {
+      const s = document.createElement('script')
+      s.src = 'https://webapi.amap.com/maps?v=2.0&key=38b348fb67f2d42cb1fa0fe61301bc45&plugin=AMap.Geolocation'
+      s.onload = () => setTimeout(() => (window.AMap ? resolve() : reject(new Error('AMap 未就绪'))), 500)
+      s.onerror = () => reject(new Error('高德 SDK 加载失败'))
+      document.head.appendChild(s)
+    })
+  }
+  return _amapReady
+}
+
+// 高德 JS SDK Geolocation 兜底（HTML5 被拒/失败时，由高德封装处理）
+function amapLocate() {
+  return new Promise((resolve) => {
+    loadAMapScript()
+      .then(() => {
+        const geolocation = new window.AMap.Geolocation({
+          enableHighAccuracy: false,
+          timeout: 8000,
+          zoomToAccuracy: false,
+        })
+        geolocation.getCurrentPosition((status, result) => {
+          if (status === 'complete' && result?.addressComponent) {
+            const city = result.addressComponent.city || result.addressComponent.province || ''
+            resolve(String(city).replace(/市$|省$/, '') || '')
+          } else {
+            resolve('')
+          }
+        })
+      })
+      .catch(() => resolve(''))
+    setTimeout(() => resolve(''), 12000)  // 总兜底超时
+  })
+}
+
+// 页面加载时：① HTML5 精准 → ② 高德 JS SDK → ③ IP 链
 onMounted(async () => {
+  const html5City = await geoLocate()
+  if (html5City) {
+    nearbyCity.value = html5City
+    return
+  }
+  const amapCity = await amapLocate()
+  if (amapCity) {
+    nearbyCity.value = amapCity
+    return
+  }
   const geoAPIs = [
     // 高德 IP 定位 — 返回纯中文城市名
     async () => {
@@ -326,6 +441,11 @@ onMounted(async () => {
       )
       if (!r.ok) throw new Error('fail')
       const d = await r.json()
+      const adcode = String(d.adcode || '')
+      // 高德只定位到省级（adcode 后两位为 00）时，city 是默认省会，改用省名避免误导
+      if (adcode.endsWith('00') && d.province) {
+        return (d.province || '').replace(/市$|省$/, '')
+      }
       const city = (d.city || d.province || '').replace(/市$|省$/, '')
       return city || ''
     },
@@ -355,6 +475,14 @@ onMounted(async () => {
     } catch { /* 尝试下一个 */ }
   }
 })
+
+function setManualCity() {
+  const c = nearbyCityInput.value.trim()
+  if (c) {
+    nearbyCity.value = c
+    manualCityMode.value = false
+  }
+}
 
 async function getNearbyRecommend() {
   nearbyLoading.value = true
@@ -448,6 +576,8 @@ onMounted(async () => {
 
 async function search() {
   loading.value = true
+  // 普通搜索/分类筛选会退出快捷筛选模式（DIY 筛选除外）
+  if (selectedCat.value !== customCatId.value) viewMode.value = 'all'
   try {
     const params = { page_size: 50 }
     if (keyword.value) params.keyword = keyword.value
@@ -486,7 +616,41 @@ async function search() {
 
 function selectCategory(id) {
   selectedCat.value = id === selectedCat.value ? null : id
+  viewMode.value = selectedCat.value === customCatId.value ? 'diy' : 'all'
   search()
+}
+
+// 「只看我的 DIY 菜谱」独立快捷筛选
+const customCatId = computed(() => {
+  const c = categories.value.find(c => c.name === '自定义')
+  return c ? c.id : null
+})
+const normalCategories = computed(() => categories.value.filter(c => c.name !== '自定义'))
+
+function toggleCustom() {
+  if (!customCatId.value) return
+  selectedCat.value = selectedCat.value === customCatId.value ? null : customCatId.value
+  viewMode.value = selectedCat.value === customCatId.value ? 'diy' : 'all'
+  search()
+}
+
+// 「我收藏的食谱」快捷筛选
+async function toggleFav() {
+  if (viewMode.value === 'fav') {
+    viewMode.value = 'all'
+    search()
+    return
+  }
+  viewMode.value = 'fav'
+  loading.value = true
+  try {
+    const res = await getFavoriteRecipes()
+    foods.value = res.items || []
+  } catch {
+    foods.value = []
+  } finally {
+    loading.value = false
+  }
 }
 
 function applyFilterFromDecide() {
@@ -589,18 +753,29 @@ async function submitRecord() {
   flex-wrap: wrap;
   margin-bottom: var(--spacing-md);
 }
-.decision-actions {
-  display: flex;
-  gap: var(--spacing-sm);
-  flex-wrap: wrap;
-  margin-bottom: var(--spacing-lg);
-  padding-bottom: var(--spacing-lg);
-  border-bottom: 1px solid var(--color-divider);
-}
 .food-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: var(--spacing-md);
+}
+.custom-filter-bar {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+.custom-btn {
+  flex: 1;
+}
+.food-card {
+  cursor: default;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.food-card.can-click {
+  cursor: pointer;
+}
+.food-card.can-click:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 .food-card-img {
   height: 120px;
@@ -625,17 +800,11 @@ async function submitRecord() {
 }
 .btn-sm { padding: 6px 14px; font-size: 13px; }
 
-/* ====== 决策布局 ====== */
-.decide-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-lg);
-  align-items: start;
-}
-.decide-left, .decide-right {
+/* ====== 辅助决策布局（上下三个独立卡片） ====== */
+.decide-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-lg);
 }
 .decide-card {
   padding: var(--spacing-md) var(--spacing-lg);
@@ -723,11 +892,6 @@ async function submitRecord() {
   margin-top: var(--spacing-lg);
 }
 
-@media (max-width: 768px) {
-  .decide-layout {
-    grid-template-columns: 1fr;
-  }
-}
 @media (max-width: 640px) {
   .food-grid { grid-template-columns: 1fr 1fr; }
 }

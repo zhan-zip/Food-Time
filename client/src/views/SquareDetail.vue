@@ -13,15 +13,15 @@
 
     <!-- 食谱详情 -->
     <template v-else>
-      <button class="btn btn-ghost" @click="$router.back()" style="margin-bottom: var(--spacing-lg);">&larr; 返回广场</button>
+      <button class="btn btn-ghost" @click="$router.back()" style="margin-bottom: var(--spacing-lg);">&larr; 返回</button>
 
       <div class="detail-layout">
         <!-- 左侧图片区 -->
         <div class="detail-sidebar">
-          <div class="detail-img" v-if="recipe.image_url">
-            <img :src="recipe.image_url" :alt="recipe.name" />
+          <div class="detail-img">
+            <img v-if="recipe.image_url" :src="recipe.image_url" :alt="recipe.name" />
+            <FoodImage v-else :name="recipe.name" />
           </div>
-          <div class="detail-img placeholder" v-else>&#x1F372;</div>
 
           <!-- 营养数据 -->
           <div class="nutrition-card" v-if="recipe.calories">
@@ -38,14 +38,14 @@
             </div>
           </div>
 
-          <!-- 收藏按钮 -->
+          <!-- 收藏按钮（仅广场食谱，且未收藏时显示） -->
           <button
-            class="btn save-btn"
-            :class="saved ? 'btn-ghost' : 'btn-primary'"
+            v-if="!isFood && !saved"
+            class="btn btn-primary save-btn"
             @click="toggleSave"
             :disabled="savingAction"
           >
-            {{ saved ? '&#x2764; 已添加到我的食物库' : '+ 添加到我的食物库' }}
+            + 添加到我的食物库
           </button>
         </div>
 
@@ -53,7 +53,7 @@
         <div class="detail-body">
           <h1 class="detail-title">{{ recipe.name }}</h1>
 
-          <div class="detail-meta">
+          <div class="detail-meta" v-if="recipe.author || recipe.created_at">
             <span class="text-secondary">by <strong>{{ recipe.author }}</strong></span>
             <span class="detail-date text-muted">{{ formatDate(recipe.created_at) }}</span>
           </div>
@@ -107,9 +107,10 @@
             <span>&#x1F4AC; {{ recipe.comment_count }} 评论</span>
           </div>
 
-          <hr class="divider" />
+          <hr class="divider" v-if="!isFood" />
 
-          <!-- 评论区 -->
+          <!-- 评论区（仅广场食谱） -->
+          <template v-if="!isFood">
           <h3>评论区 ({{ comments.length }})</h3>
 
           <div v-if="!token" class="text-muted text-sm" style="margin: var(--spacing-md) 0;">
@@ -146,6 +147,7 @@
           <p v-else class="text-muted text-sm" style="margin-top: var(--spacing-md);">
             暂无评论，抢个沙发吧
           </p>
+          </template>
         </div>
       </div>
     </template>
@@ -155,9 +157,13 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { getRecipeDetail, getComments, addComment, saveRecipe, unsaveRecipe } from '../api/public'
+import { getRecipeDetail, getComments, addComment, saveRecipe, unsaveRecipe, getFavorites } from '../api/public'
+import request from '../api/request'
+import FoodImage from '../components/FoodImage.vue'
 
 const route = useRoute()
+// 是否为食物库食物详情（/food/:id），而非广场食谱（/square/:id）
+const isFood = computed(() => route.path.startsWith('/food'))
 const recipe = ref({})
 const comments = ref([])
 const loading = ref(true)
@@ -191,9 +197,31 @@ async function fetchDetail() {
   error.value = ''
   try {
     const id = route.params.id
-    const res = await getRecipeDetail(id)
-    recipe.value = res
-    await fetchComments()
+    if (isFood.value) {
+      // 食物库食物：字段归一化为食谱结构，供模板统一渲染
+      const res = await request.get('/foods/' + id)
+      recipe.value = {
+        ...res,
+        category: String(route.query.cat || ''),
+        author: '',
+        created_at: null,
+        description: '',
+        materials: [],
+        seasonings: [],
+        steps: [],
+        calories: res.calories_per_100g,
+        protein: res.protein_per_100g,
+        fat: res.fat_per_100g,
+        carbs: res.carbs_per_100g,
+        like_count: undefined,
+        fav_count: undefined,
+        comment_count: undefined,
+      }
+    } else {
+      recipe.value = await getRecipeDetail(id)
+      await fetchComments()
+      await loadSavedStatus(id)
+    }
   } catch (e) {
     const msg = e.message
     error.value = msg === '食谱不存在' ? '该食谱不存在或已被删除' : '加载失败：' + msg
@@ -208,6 +236,14 @@ async function fetchComments() {
     const res = await getComments(id)
     comments.value = res.comments || []
   } catch { /* 评论加载失败不影响正文显示 */ }
+}
+
+// 判断当前用户是否已收藏该食谱（已收藏则隐藏「添加到食物库」按钮）
+async function loadSavedStatus(recipeId) {
+  try {
+    const res = await getFavorites()
+    saved.value = (res.recipe_ids || []).includes(Number(recipeId))
+  } catch { /* 未登录或失败忽略 */ }
 }
 
 async function toggleSave() {

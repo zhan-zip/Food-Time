@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # Pixabay 图片服务（Key 仅存 .env，不暴露前端）
     PIXABAY_API_KEY: str = ""
 
+    # 通义万相（AI 生成菜谱图片，Key 仅存 .env）
+    IMG_GEN_API_KEY: str = ""
+    IMG_GEN_BASE_URL: str = ""
+    IMG_GEN_MODEL: str = "kwai-kolors/kolors"
+
     # 邮件
     SMTP_HOST: str = "smtp.example.com"
     SMTP_PORT: int = 587
