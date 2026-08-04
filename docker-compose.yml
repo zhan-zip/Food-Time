@@ -43,10 +43,16 @@ services:
       SMTP_PORT: 587
       CORS_ORIGINS: http://localhost:8080
       DEBUG: "false"
+      # AI 配图（SiliconFlow 生成 + Pixabay 兜底）——部署时在 .env 或环境变量注入，勿硬编码
+      IMG_GEN_API_KEY: ${IMG_GEN_API_KEY:-}
+      IMG_GEN_BASE_URL: ${IMG_GEN_BASE_URL:-}
+      IMG_GEN_MODEL: ${IMG_GEN_MODEL:-kwai-kolors/kolors}
+      PIXABAY_API_KEY: ${PIXABAY_API_KEY:-}
     ports:
       - "8000:8000"
     volumes:
       - ./server/chroma_data:/app/chroma_data   # RAG 向量库持久化
+      - ./server/static:/app/static             # AI 配图资源（图在宿主机，不打进镜像）
     depends_on:
       mysql:
         condition: service_healthy
