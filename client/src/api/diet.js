@@ -24,3 +24,8 @@ export function getPreferences() {
 export function getNutrition(days = 7) {
   return request.get('/diet/nutrition', { params: { days } })
 }
+
+/** 获取营养对照《膳食指南》评估（实际 vs 推荐 vs 状态） */
+export function getNutritionAssessment(days = 7) {
+  return request.get('/diet/nutrition-assessment', { params: { days } })
+}

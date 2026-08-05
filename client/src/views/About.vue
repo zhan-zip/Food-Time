@@ -10,6 +10,16 @@
           <p class="text-sm text-secondary">{{ user?.email }}</p>
         </div>
       </div>
+      <div class="profile-info">
+        <div class="profile-meta">
+          <span v-if="genderLabel" class="tag tag-default">{{ genderLabel }}</span>
+          <span v-if="user?.age" class="tag tag-default">{{ user.age }} 岁</span>
+          <span v-if="user?.height_cm" class="tag tag-default">身高 {{ user.height_cm }} cm</span>
+          <span v-if="user?.weight_kg" class="tag tag-default">体重 {{ user.weight_kg }} kg</span>
+          <span v-if="!user?.age && !user?.gender" class="text-xs text-muted">未填写档案（按成人通用标准推荐）</span>
+        </div>
+        <button class="btn btn-outline btn-sm" @click="openEdit">&#x270F;&#xFE0F; 编辑档案</button>
+      </div>
     </div>
 
     <!-- 饮食偏好 -->
@@ -86,6 +96,19 @@
             <span class="summary-label">日均碳水<br/>g</span>
           </div>
         </div>
+
+        <!-- 对照《膳食指南》雷达图 + AI 解读 -->
+        <div v-if="assessment && assessment.days > 0 && assessment.actual.calories > 0" class="radar-section">
+          <h4 class="radar-title">📊 对照《膳食指南(2022)》推荐量</h4>
+          <canvas ref="radarCanvas" class="radar-canvas"></canvas>
+          <div class="assessment-status">
+            <span v-for="(s, k) in assessment.status" :key="k" class="tag" :class="statusClass(s)">{{ statusLabel(k, s) }}</span>
+          </div>
+          <button class="btn btn-primary btn-sm" style="margin-top: 8px" @click="interpret" :disabled="aiLoading">
+            {{ aiLoading ? 'AI 解读中...' : '🤖 AI 健康解读' }}
+          </button>
+          <div v-if="aiInterp" class="ai-interp">{{ aiInterp }}</div>
+        </div>
       </div>
     </div>
 
@@ -95,13 +118,51 @@
         退出登录
       </button>
     </div>
+
+    <!-- 编辑档案弹窗 -->
+    <div v-if="showEdit" class="modal-overlay" @click.self="showEdit = false">
+      <div class="modal-content card">
+        <h3>编辑个人信息</h3>
+        <p class="text-xs text-muted" style="margin-bottom: 12px">昵称与个人档案（档案用于个性化营养建议），均可留空</p>
+        <div class="form-group">
+          <label class="form-label">昵称</label>
+          <input v-model="editForm.nickname" type="text" class="input" placeholder="给自己起个名字" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">性别</label>
+          <select v-model="editForm.gender" class="input">
+            <option value="">未填写</option>
+            <option value="male">男</option>
+            <option value="female">女</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">年龄</label>
+          <input v-model="editForm.age" type="number" class="input" min="1" max="120" placeholder="留空则按成人通用" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">身高（cm）</label>
+          <input v-model="editForm.height_cm" type="number" class="input" min="50" max="250" placeholder="留空则按成人通用" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">体重（kg）</label>
+          <input v-model="editForm.weight_kg" type="number" class="input" min="10" max="300" placeholder="留空则按成人通用" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" @click="showEdit = false">取消</button>
+          <button class="btn btn-primary" @click="saveProfile" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
+        </div>
+        <p v-if="saveMsg" class="text-sm" :style="{ color: saveOk ? '#52c41a' : '#e74c3c', marginTop: '8px' }">{{ saveMsg }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, reactive, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getPreferences, getNutrition } from '@/api/diet'
+import { getPreferences, getNutrition, getNutritionAssessment } from '@/api/diet'
+import { updateProfile } from '@/api/auth'
 
 const router = useRouter()
 const user = ref(null)
@@ -119,6 +180,60 @@ const selectedDays = ref(7)
 const nutritionLoaded = ref(false)
 const nutrition = ref({ days: [], avg_calories: 0, avg_protein: 0, avg_fat: 0, avg_carbs: 0, total_days: 0 })
 const barCanvas = ref(null)
+
+// 个人档案编辑
+const showEdit = ref(false)
+const saving = ref(false)
+const saveMsg = ref('')
+const saveOk = ref(false)
+const editForm = reactive({ nickname: '', age: '', gender: '', height_cm: '', weight_kg: '' })
+
+const genderLabel = computed(() => {
+  if (user.value?.gender === 'male') return '男'
+  if (user.value?.gender === 'female') return '女'
+  return ''
+})
+
+function openEdit() {
+  editForm.nickname = user.value?.nickname ?? ''
+  editForm.age = user.value?.age ?? ''
+  editForm.gender = user.value?.gender ?? ''
+  editForm.height_cm = user.value?.height_cm ?? ''
+  editForm.weight_kg = user.value?.weight_kg ?? ''
+  saveMsg.value = ''
+  showEdit.value = true
+}
+
+async function saveProfile() {
+  // 昵称必填：留空时弹提示且不执行保存
+  if (!editForm.nickname.trim()) {
+    saveMsg.value = '昵称不能为空，请输入昵称'
+    saveOk.value = false
+    return
+  }
+  saving.value = true
+  saveMsg.value = ''
+  try {
+    const payload = {
+      nickname: editForm.nickname || undefined,
+      age: editForm.age ? Number(editForm.age) : undefined,
+      gender: editForm.gender || undefined,
+      height_cm: editForm.height_cm ? Number(editForm.height_cm) : undefined,
+      weight_kg: editForm.weight_kg ? Number(editForm.weight_kg) : undefined,
+    }
+    const res = await updateProfile(payload)
+    user.value = res
+    localStorage.setItem('user', JSON.stringify(res))
+    showEdit.value = false
+    saveMsg.value = '已保存'
+    saveOk.value = true
+  } catch (e) {
+    saveMsg.value = e.message || '保存失败'
+    saveOk.value = false
+  } finally {
+    saving.value = false
+  }
+}
 
 onMounted(() => {
   try {
@@ -146,6 +261,120 @@ async function loadNutrition(days) {
     drawBarChart()
   } catch { /* ignore */ }
   nutritionLoaded.value = true
+  loadAssessment()
+}
+
+// ===== 营养对照《膳食指南》评估（雷达图 + AI 解读）=====
+const assessment = ref(null)
+const radarCanvas = ref(null)
+const aiInterp = ref('')
+const aiLoading = ref(false)
+
+async function loadAssessment() {
+  try {
+    const res = await getNutritionAssessment(selectedDays.value)
+    assessment.value = res
+    await nextTick()
+    drawRadar()
+  } catch { /* ignore */ }
+}
+
+const statusLabel = (k, s) => ({ calories: '热量', protein: '蛋白质', fat: '脂肪', carbs: '碳水' }[k] + '：' + s)
+const statusClass = (s) => (s === '正常' ? 'tag-default' : s === '偏高' ? 'tag-warn' : 'tag-default')
+
+function drawRadar() {
+  const canvas = radarCanvas.value
+  if (!canvas || !assessment.value) return
+  // DPR 高清渲染（避免模糊）
+  const dpr = window.devicePixelRatio || 1
+  const cssW = 300, cssH = 260
+  canvas.width = cssW * dpr
+  canvas.height = cssH * dpr
+  canvas.style.width = cssW + 'px'
+  canvas.style.height = cssH + 'px'
+  const ctx = canvas.getContext('2d')
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  const W = cssW, H = cssH
+  ctx.clearRect(0, 0, W, H)
+  const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 44
+  const labels = ['热量', '蛋白质', '脂肪', '碳水']
+  const keys = ['calories', 'protein', 'fat', 'carbs']
+  const a = assessment.value
+  const maxVals = keys.map(k => Math.max(a.actual[k], a.guideline[k], 1))
+  // 网格
+  for (let ring = 1; ring <= 4; ring++) {
+    ctx.beginPath()
+    for (let i = 0; i <= keys.length; i++) {
+      const idx = i % keys.length
+      const ang = (Math.PI * 2 / keys.length) * idx - Math.PI / 2
+      const rr = R * ring / 4
+      const x = cx + Math.cos(ang) * rr, y = cy + Math.sin(ang) * rr
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+    }
+    ctx.strokeStyle = '#e0d5c8'; ctx.lineWidth = 1; ctx.stroke()
+  }
+  keys.forEach((k, i) => {
+    const ang = (Math.PI * 2 / keys.length) * i - Math.PI / 2
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R)
+    ctx.strokeStyle = '#e0d5c8'; ctx.stroke()
+    ctx.fillStyle = '#3A2418'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'
+    ctx.fillText(labels[i], cx + Math.cos(ang) * (R + 18), cy + Math.sin(ang) * (R + 18) + 4)
+  })
+  const drawPolygon = (values, color, dashed) => {
+    ctx.beginPath()
+    keys.forEach((k, i) => {
+      const ang = (Math.PI * 2 / keys.length) * i - Math.PI / 2
+      const rr = R * (values[i] / maxVals[i])
+      const x = cx + Math.cos(ang) * rr, y = cy + Math.sin(ang) * rr
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+    })
+    ctx.closePath()
+    ctx.strokeStyle = color; ctx.lineWidth = 2
+    if (dashed) ctx.setLineDash([5, 4])
+    ctx.stroke(); ctx.setLineDash([])
+    ctx.fillStyle = dashed ? 'rgba(217,161,91,0.10)' : 'rgba(230,126,34,0.07)'
+    ctx.fill()
+  }
+  drawPolygon(keys.map(k => a.guideline[k]), '#D9A15B', true)
+  drawPolygon(keys.map(k => a.actual[k]), '#E67E22', false)
+  ctx.fillStyle = '#B87D3A'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left'
+  ctx.fillText('— 推荐（膳食指南）', 10, 22)
+  ctx.fillStyle = '#E67E22'
+  ctx.fillText('— 你的日均摄入', 10, 40)
+}
+
+async function interpret() {
+  aiLoading.value = true
+  aiInterp.value = ''
+  const token = localStorage.getItem('token')
+  try {
+    const resp = await fetch('/api/chat/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ content: '请解读我的营养分析数据（对照膳食指南推荐量）。要求：先用一句话总结整体状况，再列出3-5条具体可执行的调整建议（每条带依据），简洁结构化、一目了然，总字数200字以内。', session_id: 'about-nutrition' }),
+    })
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = '', currentEvent = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      const lines = buf.split('\n')
+      buf = lines.pop() || ''
+      for (const line of lines) {
+        const t = line.trim()
+        if (t.startsWith('event:')) currentEvent = t.slice(6).trim()
+        else if (t.startsWith('data:')) {
+          try {
+            const data = JSON.parse(t.slice(5).trim())
+            if (currentEvent === 'token') aiInterp.value += data.content || ''
+          } catch { /* 忽略 */ }
+        }
+      }
+    }
+  } catch { aiInterp.value = '解读失败，请重试' }
+  finally { aiLoading.value = false }
 }
 
 function drawBarChart() {
@@ -244,6 +473,85 @@ function handleLogout() {
 </script>
 
 <style scoped>
+/* 营养对照《膳食指南》雷达图 */
+.radar-section {
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+  border-top: 1px dashed var(--color-divider);
+}
+.radar-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  margin-bottom: var(--spacing-sm);
+}
+.radar-canvas {
+  display: block;
+  margin: 0 auto;
+}
+.assessment-status {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: var(--spacing-sm) 0;
+}
+.tag-warn {
+  background: #FFF3E0;
+  color: #E67E22;
+  border-color: #F5C488;
+}
+.ai-interp {
+  margin-top: var(--spacing-sm);
+  padding: 10px 12px;
+  background: var(--color-bg-warm);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  text-align: left;
+}
+
+/* 编辑档案弹窗：居中遮罩 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-content {
+  width: 400px;
+  max-width: 90vw;
+  padding: var(--spacing-lg);
+}
+.modal-content h3 {
+  margin-bottom: 4px;
+  font-size: var(--font-size-lg);
+}
+.modal-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: flex-end;
+  margin-top: var(--spacing-lg);
+}
+.profile-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: var(--spacing-sm);
+}
+.profile-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
 .profile-header {
   display: flex;
   align-items: center;

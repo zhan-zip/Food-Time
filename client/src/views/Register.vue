@@ -71,6 +71,25 @@
           <p v-if="codeSent" class="field-hint field-hint--success">验证码已发送到 {{ form.email }}，请查收（检查垃圾箱）</p>
         </div>
 
+        <!-- 选填：个人档案（用于个性化营养建议） -->
+        <div class="form-group profile-optional">
+          <label class="form-label">
+            选填 · 个人档案
+            <span class="text-xs text-muted">（用于个性化营养建议，可跳过）</span>
+          </label>
+          <div class="profile-fields">
+            <select v-model="form.gender" class="input">
+              <option value="">性别（选填）</option>
+              <option value="male">男</option>
+              <option value="female">女</option>
+            </select>
+            <input v-model="form.age" type="number" class="input" placeholder="年龄（选填）" min="1" max="120" />
+            <input v-model="form.height_cm" type="number" class="input" placeholder="身高 cm（选填）" min="50" max="250" />
+            <input v-model="form.weight_kg" type="number" class="input" placeholder="体重 kg（选填）" min="10" max="300" />
+          </div>
+          <p class="field-hint">不填则按成人通用标准推荐</p>
+        </div>
+
         <p v-if="errorMsg" class="form-error">{{ errorMsg }}</p>
 
         <button type="submit" class="btn btn-primary btn-lg auth-submit" :disabled="loading">
@@ -98,7 +117,7 @@ const codeSent = ref(false)
 const countdown = ref(0)
 const errorMsg = ref('')
 const errors = reactive({ nickname: '', email: '', password: '', code: '' })
-const form = reactive({ email: '', password: '', nickname: '', code: '' })
+const form = reactive({ email: '', password: '', nickname: '', code: '', age: '', gender: '', height_cm: '', weight_kg: '' })
 
 function clearError(field) {
   errors[field] = ''
@@ -189,7 +208,16 @@ async function handleRegister() {
 
   loading.value = true
   try {
-    const res = await request.post('/auth/register', form)
+    const payload = {
+      email: form.email,
+      password: form.password,
+      nickname: form.nickname,
+      age: form.age ? Number(form.age) : undefined,
+      gender: form.gender || undefined,
+      height_cm: form.height_cm ? Number(form.height_cm) : undefined,
+      weight_kg: form.weight_kg ? Number(form.weight_kg) : undefined,
+    }
+    const res = await request.post('/auth/register', payload)
     localStorage.setItem('token', res.access_token)
     localStorage.setItem('user', JSON.stringify(res.user))
     router.push('/')
@@ -202,6 +230,16 @@ async function handleRegister() {
 </script>
 
 <style scoped>
+.profile-optional {
+  border-top: 1px dashed var(--color-divider);
+  padding-top: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+}
+.profile-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
 .auth-page {
   min-height: 100vh;
   display: flex;
