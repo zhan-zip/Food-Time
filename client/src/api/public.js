@@ -13,8 +13,16 @@ export function getComments(recipeId) {
   return request.get(`/public/recipes/${recipeId}/comments`)
 }
 
-export function addComment(recipeId, content) {
-  return request.post(`/public/recipes/${recipeId}/comment`, { content })
+export function addComment(recipeId, content, parentId) {
+  return request.post(`/public/recipes/${recipeId}/comment`, { content, parent_id: parentId || null })
+}
+
+export function deleteComment(recipeId, commentId) {
+  return request.delete(`/public/recipes/${recipeId}/comments/${commentId}`)
+}
+
+export function getCommentSummary(recipeId) {
+  return request.get(`/public/recipes/${recipeId}/comment-summary`)
 }
 
 export function saveRecipe(recipeId) {

@@ -31,5 +31,6 @@ class Comment(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     recipe_id = Column(Integer, ForeignKey("custom_recipes.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("recipe_comments.id"), nullable=True)  # 楼中楼：指向父评论，顶层为 NULL
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=func.now())

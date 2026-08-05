@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, delete
 
 from src.database import get_db
 from src.dependencies import get_current_user
@@ -184,7 +184,7 @@ async def get_comments(
     recipe_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """获取食谱评论列表"""
+    """获取食谱评论列表（含楼中楼回复；parent_id 为空为顶层评论）"""
     q = (
         select(Comment, User)
         .join(User, Comment.user_id == User.id)
@@ -197,7 +197,9 @@ async def get_comments(
         "comments": [
             {
                 "id": c.id,
+                "user_id": c.user_id,
                 "user": u.nickname,
+                "parent_id": c.parent_id,
                 "content": c.content,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
             }
@@ -213,22 +215,88 @@ async def add_comment(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """添加评论"""
+    """添加评论（传入 parent_id 时为楼中楼回复）"""
     text = content.get("content", "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="评论内容不能为空")
 
-    comment = Comment(recipe_id=recipe_id, user_id=current_user.id, content=text)
+    parent_id = content.get("parent_id")
+    if parent_id is not None:
+        parent = await db.get(Comment, parent_id)
+        if parent is None or parent.recipe_id != recipe_id:
+            raise HTTPException(status_code=400, detail="回复的评论不存在")
+
+    comment = Comment(recipe_id=recipe_id, user_id=current_user.id, content=text, parent_id=parent_id)
     db.add(comment)
     await db.flush()
     await db.refresh(comment)
 
     return {
         "id": comment.id,
+        "user_id": comment.user_id,
         "user": current_user.nickname,
+        "parent_id": comment.parent_id,
         "content": comment.content,
         "created_at": comment.created_at.isoformat() if comment.created_at else None,
     }
+
+
+@router.delete("/recipes/{recipe_id}/comments/{comment_id}")
+async def delete_comment(
+    recipe_id: int,
+    comment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除评论（作者本人或管理员；同时级联删除其楼中楼回复）"""
+    comment = await db.get(Comment, comment_id)
+    if comment is None or comment.recipe_id != recipe_id:
+        raise HTTPException(status_code=404, detail="评论不存在")
+    if comment.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="无权删除该评论")
+
+    # 级联删除该评论的直接回复（楼中楼）
+    await db.execute(delete(Comment).where(Comment.parent_id == comment_id))
+    await db.delete(comment)
+    await db.flush()
+    return {"message": "评论已删除"}
+
+
+@router.get("/recipes/{recipe_id}/comment-summary")
+async def comment_summary(
+    recipe_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """AI 评论总结：评论 ≥ 5 条时触发 DeepSeek 提炼要点"""
+    from src.services.deepseek import deepseek
+
+    q = (
+        select(Comment, User)
+        .join(User, Comment.user_id == User.id)
+        .where(Comment.recipe_id == recipe_id)
+        .order_by(Comment.created_at.asc())
+    )
+    rows = (await db.execute(q)).all()
+    count = len(rows)
+
+    if count < 5:
+        return {"summary": None, "count": count, "triggered": False}
+
+    if not deepseek.is_configured:
+        return {"summary": None, "count": count, "triggered": True, "error": "AI 未配置"}
+
+    comments_text = "\n".join(f"{u.nickname}：{c.content}" for c, u in rows)
+    prompt = (
+        f"下面是某个美食食谱的 {count} 条用户评论，请提炼大家的整体看法。"
+        f"要求：一句话概括整体口碑；再列出 2-4 个被反复提到的高频点（好评/建议/疑问各归其类）；"
+        f"简洁结构化，总共 200 字以内，直接输出内容，不要标题和寒暄。\n\n评论：\n{comments_text}"
+    )
+    try:
+        resp = await deepseek.chat_simple([{"role": "user", "content": prompt}])
+    except Exception as e:
+        return {"summary": None, "count": count, "triggered": True, "error": str(e)}
+
+    return {"summary": resp, "count": count, "triggered": True}
 
 
 # ==================== 我的收藏列表 ====================

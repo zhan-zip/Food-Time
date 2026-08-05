@@ -38,14 +38,15 @@
             </div>
           </div>
 
-          <!-- 收藏按钮（仅广场食谱，且未收藏时显示） -->
+          <!-- 收藏按钮（仅广场食谱；未收藏→添加，已收藏→取消收藏） -->
           <button
-            v-if="!isFood && !saved"
-            class="btn btn-primary save-btn"
+            v-if="!isFood"
+            class="btn save-btn"
+            :class="saved ? 'btn-outline' : 'btn-primary'"
             @click="toggleSave"
             :disabled="savingAction"
           >
-            + 添加到我的食物库
+            {{ saved ? '✕ 取消收藏' : '+ 添加到我的食物库' }}
           </button>
         </div>
 
@@ -127,7 +128,7 @@
             ></textarea>
             <button
               class="btn btn-primary btn-sm"
-              @click="submitComment"
+              @click="submitComment()"
               :disabled="!commentText.trim() || commenting"
               style="margin-top: var(--spacing-sm);"
             >
@@ -136,12 +137,44 @@
           </div>
 
           <div class="comment-list" v-if="comments.length > 0">
-            <div v-for="c in comments" :key="c.id" class="comment-item">
+            <!-- AI 评论总结（评论 ≥5 条触发） -->
+            <div v-if="summary" class="comment-summary">
+              <p class="comment-summary-title">🤖 AI 评论总结</p>
+              <p class="comment-summary-content">{{ summary }}</p>
+            </div>
+            <div v-else-if="summaryLoading" class="comment-summary comment-summary--loading">
+              <p class="comment-summary-content">🤖 正在总结大家的评论...</p>
+            </div>
+
+            <div v-for="c in topComments" :key="c.id" class="comment-item">
               <div class="comment-header">
                 <strong>{{ c.user }}</strong>
                 <span class="text-muted text-xs">{{ formatDate(c.created_at) }}</span>
+                <span v-if="canDelete(c)" class="comment-del" @click="removeComment(c)">删除</span>
               </div>
               <p class="comment-content">{{ c.content }}</p>
+              <div class="comment-actions">
+                <button v-if="token" class="comment-reply-btn" @click="toggleReply(c)">{{ replyTo === c.id ? '取消回复' : '回复' }}</button>
+              </div>
+              <div v-if="replyTo === c.id" class="reply-form">
+                <input
+                  v-model="replyText"
+                  class="input"
+                  :placeholder="'回复 ' + c.user + '...'"
+                  @keyup.enter="submitComment(c.id)"
+                />
+                <button class="btn btn-primary btn-sm" @click="submitComment(c.id)" :disabled="!replyText.trim() || commenting">回复</button>
+              </div>
+
+              <!-- 楼中楼回复 -->
+              <div v-for="r in c.replies" :key="r.id" class="comment-item comment-reply">
+                <div class="comment-header">
+                  <strong>{{ r.user }}</strong>
+                  <span class="text-muted text-xs">{{ formatDate(r.created_at) }}</span>
+                  <span v-if="canDelete(r)" class="comment-del" @click="removeComment(r)">删除</span>
+                </div>
+                <p class="comment-content">{{ r.content }}</p>
+              </div>
             </div>
           </div>
           <p v-else class="text-muted text-sm" style="margin-top: var(--spacing-md);">
@@ -157,7 +190,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { getRecipeDetail, getComments, addComment, saveRecipe, unsaveRecipe, getFavorites } from '../api/public'
+import { getRecipeDetail, getComments, addComment, deleteComment, getCommentSummary, saveRecipe, unsaveRecipe, getFavorites } from '../api/public'
 import request from '../api/request'
 import FoodImage from '../components/FoodImage.vue'
 
@@ -172,6 +205,30 @@ const saved = ref(false)
 const savingAction = ref(false)
 const commentText = ref('')
 const commenting = ref(false)
+
+// 楼中楼回复
+const replyTo = ref(null)
+const replyText = ref('')
+
+// AI 评论总结
+const summary = ref(null)
+const summaryLoading = ref(false)
+
+// 当前用户（用于判断评论删除权限：作者本人或管理员）
+const _user = JSON.parse(localStorage.getItem('user') || '{}')
+const currentUserId = _user.id
+const isAdmin = !!_user.is_admin
+
+// 组织楼中楼：顶层评论 + 每个顶层的 replies（按 parent_id 分组）
+const topComments = computed(() => {
+  const replyMap = {}
+  for (const c of comments.value) {
+    if (c.parent_id) {
+      (replyMap[c.parent_id] ||= []).push(c)
+    }
+  }
+  return comments.value.filter(c => !c.parent_id).map(t => ({ ...t, replies: replyMap[t.id] || [] }))
+})
 
 const token = localStorage.getItem('token')
 
@@ -236,9 +293,10 @@ async function fetchComments() {
     const res = await getComments(id)
     comments.value = res.comments || []
   } catch { /* 评论加载失败不影响正文显示 */ }
+  loadSummary()
 }
 
-// 判断当前用户是否已收藏该食谱（已收藏则隐藏「添加到食物库」按钮）
+// 判断当前用户是否已收藏该食谱（已收藏则在按钮位置显示「取消收藏」）
 async function loadSavedStatus(recipeId) {
   try {
     const res = await getFavorites()
@@ -264,23 +322,65 @@ async function toggleSave() {
   }
 }
 
-async function submitComment() {
+async function submitComment(parentId = null) {
   if (!token) return
-  const text = commentText.value.trim()
+  const text = (parentId ? replyText.value : commentText.value).trim()
   if (!text) return
   commenting.value = true
   try {
-    const res = await addComment(route.params.id, text)
+    const res = await addComment(route.params.id, text, parentId)
     comments.value.unshift(res)
-    commentText.value = ''
+    if (parentId) {
+      replyTo.value = null
+      replyText.value = ''
+    } else {
+      commentText.value = ''
+    }
     if (recipe.value.comment_count !== undefined) {
       recipe.value.comment_count++
     }
   } catch (e) {
-    alert('评论失败：' + (e.response?.data?.detail || e.message))
+    alert((parentId ? '回复失败：' : '评论失败：') + (e.response?.data?.detail || e.message || '请重试'))
   } finally {
     commenting.value = false
   }
+}
+
+// 楼中楼：切换回复输入框
+function toggleReply(c) {
+  replyTo.value = replyTo.value === c.id ? null : c.id
+  replyText.value = ''
+}
+
+// 删除权限：作者本人或管理员
+function canDelete(c) {
+  return c.user_id === currentUserId || isAdmin
+}
+
+// 删除评论（同时移除其楼中楼回复）
+async function removeComment(c) {
+  if (!window.confirm('确定删除这条评论吗？')) return
+  try {
+    await deleteComment(route.params.id, c.id)
+    const removedReplies = comments.value.filter(x => x.parent_id === c.id).length
+    comments.value = comments.value.filter(x => x.id !== c.id && x.parent_id !== c.id)
+    if (recipe.value.comment_count !== undefined) {
+      recipe.value.comment_count = Math.max(0, recipe.value.comment_count - 1 - removedReplies)
+    }
+  } catch (e) {
+    alert('删除失败：' + (e.response?.data?.detail || e.message || '请重试'))
+  }
+}
+
+// AI 评论总结（评论 ≥5 条时触发）
+async function loadSummary() {
+  if (comments.value.length < 5) return
+  summaryLoading.value = true
+  try {
+    const res = await getCommentSummary(route.params.id)
+    if (res.triggered && res.summary) summary.value = res.summary
+  } catch { /* 忽略 */ }
+  finally { summaryLoading.value = false }
 }
 
 onMounted(fetchDetail)
@@ -459,6 +559,71 @@ watch(() => route.params.id, fetchDetail)
   font-size: var(--font-size-sm);
   line-height: 1.6;
   color: var(--color-text);
+}
+
+/* 评论删除 / 回复 / 楼中楼 / AI 总结 */
+.comment-del {
+  color: var(--color-danger);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  margin-left: auto;
+  opacity: 0.7;
+}
+.comment-del:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+.comment-actions {
+  margin-top: var(--spacing-xs);
+}
+.comment-reply-btn {
+  background: none;
+  border: none;
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  padding: 0;
+}
+.comment-reply-btn:hover {
+  text-decoration: underline;
+}
+.reply-form {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+.reply-form .input {
+  flex: 1;
+}
+.comment-reply {
+  margin-left: var(--spacing-lg);
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-card);
+  border-left: 3px solid var(--color-divider);
+}
+.comment-summary {
+  background: linear-gradient(135deg, rgba(217,161,91,0.12), rgba(217,161,91,0.04));
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+.comment-summary-title {
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-sm);
+  margin-bottom: 4px;
+}
+.comment-summary-content {
+  font-size: var(--font-size-sm);
+  line-height: 1.7;
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+.comment-summary--loading .comment-summary-content {
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 768px) {
