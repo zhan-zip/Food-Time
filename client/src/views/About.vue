@@ -123,7 +123,7 @@
     <div v-if="showEdit" class="modal-overlay" @click.self="showEdit = false">
       <div class="modal-content card">
         <h3>编辑个人信息</h3>
-        <p class="text-xs text-muted" style="margin-bottom: 12px">昵称与个人档案（档案用于个性化营养建议），均可留空</p>
+        <p class="text-xs text-muted" style="margin-bottom: 12px">昵称必填；个人档案（用于个性化营养建议）可留空</p>
         <div class="form-group">
           <label class="form-label">昵称</label>
           <input v-model="editForm.nickname" type="text" class="input" placeholder="给自己起个名字" />
@@ -215,15 +215,16 @@ async function saveProfile() {
   saveMsg.value = ''
   try {
     const payload = {
-      nickname: editForm.nickname || undefined,
-      age: editForm.age ? Number(editForm.age) : undefined,
-      gender: editForm.gender || undefined,
-      height_cm: editForm.height_cm ? Number(editForm.height_cm) : undefined,
-      weight_kg: editForm.weight_kg ? Number(editForm.weight_kg) : undefined,
+      nickname: editForm.nickname.trim(),
+      age: editForm.age ? Number(editForm.age) : null,
+      gender: editForm.gender || null,
+      height_cm: editForm.height_cm ? Number(editForm.height_cm) : null,
+      weight_kg: editForm.weight_kg ? Number(editForm.weight_kg) : null,
     }
     const res = await updateProfile(payload)
     user.value = res
     localStorage.setItem('user', JSON.stringify(res))
+    window.dispatchEvent(new CustomEvent('user-updated'))  // 通知导航栏立即刷新昵称
     showEdit.value = false
     saveMsg.value = '已保存'
     saveOk.value = true
@@ -257,10 +258,12 @@ async function loadNutrition(days) {
   try {
     const res = await getNutrition(days)
     nutrition.value = res
+    nutritionLoaded.value = true  // 先激活 v-else 分支，让柱状图 canvas 挂载，再绘制
     await nextTick()
     drawBarChart()
-  } catch { /* ignore */ }
-  nutritionLoaded.value = true
+  } catch {
+    nutritionLoaded.value = true
+  }
   loadAssessment()
 }
 
@@ -380,9 +383,17 @@ async function interpret() {
 function drawBarChart() {
   const canvas = barCanvas.value
   if (!canvas || !nutrition.value.days.length) return
+  // DPR 高清渲染：分辨率匹配显示尺寸 × devicePixelRatio，修复高 DPI 屏模糊
+  const dpr = window.devicePixelRatio || 1
+  const rect = canvas.getBoundingClientRect()
+  const W = Math.round(rect.width) || canvas.width
+  const H = Math.round(rect.height) || canvas.height
+  canvas.width = W * dpr
+  canvas.height = H * dpr
+  canvas.style.width = W + 'px'
+  canvas.style.height = H + 'px'
   const ctx = canvas.getContext('2d')
-  const W = canvas.width
-  const H = canvas.height
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   const pad = { top: 30, right: 20, bottom: 50, left: 60 }
   const pw = W - pad.left - pad.right
   const ph = H - pad.top - pad.bottom

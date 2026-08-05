@@ -102,7 +102,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -156,7 +156,19 @@ async function loadUserInfo() {
   }
 }
 
-onMounted(loadUserInfo)
+// 监听「用户信息已更新」事件（About 页保存档案后派发），立即刷新导航栏昵称
+function onUserUpdated() {
+  loadUserInfo()
+}
+
+onMounted(() => {
+  loadUserInfo()
+  window.addEventListener('user-updated', onUserUpdated)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('user-updated', onUserUpdated)
+})
 
 // 监听路由变化刷新 token 状态
 watch(() => route.path, () => {
