@@ -87,12 +87,13 @@
       <div class="card decide-card">
         <h3 class="decide-card-title">&#x1F4F7; 食材识别</h3>
 
-        <input ref="ingInput" type="file" accept="image/*" capture="environment" style="display:none" @change="onIngredientUpload" />
+        <input ref="ingInput" id="ing-file" type="file" accept="image/*" style="display:none" @change="onIngredientUpload" />
 
         <div v-if="ingLoading" class="text-center text-muted text-sm" style="padding:24px 0">🤖 正在识别食材...</div>
-        <div v-else-if="!recognizedIngredients.length" class="text-center text-muted text-sm" style="padding:24px 0; cursor:pointer" @click="triggerIngUpload">
+        <!-- 用 label 原生关联触发文件选择（比 JS click() 更可靠，兼容桌面端） -->
+        <label v-else-if="!recognizedIngredients.length" for="ing-file" class="text-center text-muted text-sm" style="padding:24px 0; cursor:pointer; display:block">
           📷 拍照或上传食材照片<br/><span style="font-size:12px">AI 自动识别有什么食材</span>
-        </div>
+        </label>
 
         <template v-else>
           <p class="text-sm text-secondary" style="margin-bottom:8px">识别到以下食材（点击可移除）：</p>
