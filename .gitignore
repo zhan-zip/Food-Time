@@ -44,3 +44,10 @@ chroma_data/
 # ========== 文档（全部不上传） ==========
 *.md
 docs/
+
+# ========== Playwright MCP 调试日志 ==========
+.playwright-mcp/
+
+# ========== AI 配图静态资源（图在宿主机 / Docker volume 挂载，不入库）==========
+# 需要补图时运行：python server/generate_images.py（food_img 批量重生成）
+server/static/food_img/
