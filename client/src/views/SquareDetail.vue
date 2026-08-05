@@ -339,6 +339,10 @@ async function submitComment(parentId = null) {
     if (recipe.value.comment_count !== undefined) {
       recipe.value.comment_count++
     }
+    // 评论数达到阈值且尚未生成总结时，自动触发 AI 总结（无需刷新）
+    if (!summary.value && comments.value.length >= 5) {
+      loadSummary()
+    }
   } catch (e) {
     alert((parentId ? '回复失败：' : '评论失败：') + (e.response?.data?.detail || e.message || '请重试'))
   } finally {
@@ -554,6 +558,9 @@ watch(() => route.params.id, fetchDetail)
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--spacing-xs);
+}
+.comment-header strong + .text-muted {
+  margin-left: var(--spacing-md); /* 用户名与评论时间拉开间距 */
 }
 .comment-content {
   font-size: var(--font-size-sm);
