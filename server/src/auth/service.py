@@ -34,12 +34,17 @@ def generate_verification_code() -> str:
 
 # ---------- 用户服务 ----------
 
-async def create_user(db: AsyncSession, email: str, password: str, nickname: str | None = None) -> User:
+async def create_user(
+    db: AsyncSession, email: str, password: str, nickname: str | None = None,
+    age: int | None = None, gender: str | None = None,
+    height_cm: float | None = None, weight_kg: float | None = None,
+) -> User:
     user = User(
         email=email,
         password_hash=hash_password(password),
         nickname=nickname or email.split("@")[0],
         email_verified=False,
+        age=age, gender=gender, height_cm=height_cm, weight_kg=weight_kg,
     )
     db.add(user)
     await db.flush()

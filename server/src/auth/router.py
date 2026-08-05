@@ -21,7 +21,10 @@ async def register(data: schemas.UserRegister, request: Request, db: AsyncSessio
     # 改为直接 INSERT，依赖唯一索引 + IntegrityError 捕获，并发注册返回 400 而非 500。
     from sqlalchemy.exc import IntegrityError
     try:
-        user = await service.create_user(db, data.email, data.password, data.nickname)
+        user = await service.create_user(
+            db, data.email, data.password, data.nickname,
+            data.age, data.gender, data.height_cm, data.weight_kg,
+        )
         await db.commit()
     except IntegrityError:
         await db.rollback()
@@ -105,6 +108,14 @@ async def update_profile(
         current_user.nickname = data.nickname
     if data.avatar_url is not None:
         current_user.avatar_url = data.avatar_url
+    if data.age is not None:
+        current_user.age = data.age
+    if data.gender is not None:
+        current_user.gender = data.gender
+    if data.height_cm is not None:
+        current_user.height_cm = data.height_cm
+    if data.weight_kg is not None:
+        current_user.weight_kg = data.weight_kg
     await db.flush()
     await db.refresh(current_user)
     return schemas.UserOut.model_validate(current_user)

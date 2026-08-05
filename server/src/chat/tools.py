@@ -17,6 +17,8 @@ from src.food.models import Food, FoodCategory
 from src.diet.models import DietRecord, UserPreference
 from src.expense.models import ExpenseRecord
 from src.chat.models import LongMemory
+from src.auth.models import User
+from src.services.diet_guideline import get_guideline, source_note
 
 # ============================================================
 # TOOLS — OpenAI function calling 格式
@@ -167,6 +169,20 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_daily_nutrition_assessment",
+            "description": "评估用户近N天饮食摄入，对照《中国居民膳食指南(2022)》成人推荐量给出达标/偏高/偏低结论。当用户问'我吃得健不健康/营养够不够/该怎么调整饮食'时调用。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer", "description": "评估最近几天，默认7天"},
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 # ============================================================
@@ -185,6 +201,7 @@ TOOLS_README = """【可用工具清单】
 8. add_diet_record(food_name, meal_type, quantity_g) — 记录用户饮食
 9. analyze_food_image(image_url) — 分析食物图片
 10. get_nearby_food(location, cuisine?) — 附近食物推荐（选做）
+11. get_daily_nutrition_assessment(days?) — 评估近N天饮食摄入，对照《中国居民膳食指南(2022)》推荐量（达标/偏高/偏低）
 
 【工具调用规则】
 - 涉及食物营养数据 → 必须调用 search_foods 或 get_food_nutrition
@@ -486,6 +503,66 @@ async def execute_tool(
             return (
                 f"[占位] {location} 附近暂无餐厅数据。\n"
                 "该功能需要接入地图API，为选做功能。可建议用户使用 search_foods 查找当地特色菜。"
+            )
+
+        # ---- 工具 11：膳食营养评估（对照膳食指南推荐量） ----
+        elif tool_name == "get_daily_nutrition_assessment":
+            days = arguments.get("days", 7)
+            try:
+                days = int(days)
+            except (TypeError, ValueError):
+                days = 7
+
+            # 用户性别（未填写用通用成人参考）
+            user_row = await db.execute(select(User).where(User.id == user_id))
+            user = user_row.scalar_one_or_none()
+            gender = user.gender if user else None
+            guide = get_guideline(gender)
+
+            from datetime import date, timedelta
+            since = date.today() - timedelta(days=days)
+            q = (
+                select(DietRecord, Food.calories_per_100g, Food.protein_per_100g)
+                .join(Food, DietRecord.food_id == Food.id)
+                .where(DietRecord.user_id == user_id, DietRecord.record_date >= since)
+            )
+            rows = (await db.execute(q)).all()
+            if not rows:
+                return f"最近 {days} 天暂无饮食记录，无法评估。建议先用 add_diet_record 工具记录饮食。"
+
+            total_cal = sum(
+                (float(cal) * float(r.quantity_g) / 100)
+                for r, cal, _ in rows if cal
+            )
+            total_pro = sum(
+                (float(pro) * float(r.quantity_g) / 100)
+                for r, _, pro in rows if pro
+            )
+            days_span = max(1, len({r.record_date for r, _, _ in rows}))
+            avg_cal = total_cal / days_span
+            avg_pro = total_pro / days_span
+
+            cal_ref = guide["calories"]
+            pro_ref = guide["protein"]
+            if isinstance(cal_ref, tuple):
+                cal_status = "正常" if cal_ref[0] <= avg_cal <= cal_ref[1] else ("偏高" if avg_cal > cal_ref[1] else "偏低")
+                cal_str = f"{cal_ref[0]}-{cal_ref[1]}"
+            else:
+                cal_status = "正常" if abs(avg_cal - cal_ref) <= cal_ref * 0.1 else ("偏高" if avg_cal > cal_ref else "偏低")
+                cal_str = f"约{cal_ref}"
+            if isinstance(pro_ref, tuple):
+                pro_status = "正常" if pro_ref[0] <= avg_pro <= pro_ref[1] else ("偏高" if avg_pro > pro_ref[1] else "偏低")
+                pro_str = f"{pro_ref[0]}-{pro_ref[1]}"
+            else:
+                pro_status = "正常" if pro_ref * 0.9 <= avg_pro <= pro_ref * 1.1 else ("偏高" if avg_pro > pro_ref else "偏低")
+                pro_str = f"≥{pro_ref}"
+
+            return (
+                f"【近{days}天营养摄入评估（日均）】\n"
+                f"- 热量：日均 {avg_cal:.0f} kcal，参考 {cal_str} kcal/日 → 状态：{cal_status}\n"
+                f"- 蛋白质：日均 {avg_pro:.0f} g，参考 {pro_str} g/日 → 状态：{pro_status}\n"
+                f"- 用户性别：{gender or '未填写（按成人通用参考）'}\n"
+                f"- {source_note()}"
             )
 
         else:

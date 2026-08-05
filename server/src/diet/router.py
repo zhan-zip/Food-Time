@@ -11,6 +11,7 @@ from src.dependencies import get_current_user
 from src.auth.models import User
 from src.food.models import Food
 from src.diet.models import DietRecord, UserPreference
+from src.services.diet_guideline import get_guideline
 
 router = APIRouter(prefix="/api/diet", tags=["饮食记录"])
 
@@ -279,6 +280,87 @@ async def nutrition(
         "avg_fat": round(total_fat / day_count, 1),
         "avg_carbs": round(total_carbs / day_count, 1),
         "total_days": len(daily),
+    }
+
+
+@router.get("/nutrition-assessment")
+async def nutrition_assessment(
+    days: int = Query(7, ge=1, le=90),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """营养对照《膳食指南(2022)》评估：近N天日均实际摄入 vs 推荐量（供前端雷达图/数据分析）"""
+    since = date.today() - timedelta(days=days - 1)
+    q = (
+        select(
+            func.sum(func.coalesce(
+                DietRecord.adjusted_calories,
+                Food.calories_per_100g * DietRecord.quantity_g / 100,
+            )).label("cal"),
+            func.sum(Food.protein_per_100g * DietRecord.quantity_g / 100).label("pro"),
+            func.sum(Food.fat_per_100g * DietRecord.quantity_g / 100).label("fat"),
+            func.sum(Food.carbs_per_100g * DietRecord.quantity_g / 100).label("carbs"),
+        )
+        .join(Food, DietRecord.food_id == Food.id)
+        .where(DietRecord.user_id == current_user.id, DietRecord.record_date >= since)
+    )
+    row = (await db.execute(q)).one()
+
+    # 有记录的天数
+    dq = (
+        select(func.count(func.distinct(DietRecord.record_date)))
+        .where(DietRecord.user_id == current_user.id, DietRecord.record_date >= since)
+    )
+    days_span = max(1, (await db.execute(dq)).scalar() or 0)
+
+    actual = {
+        "calories": round(float(row.cal or 0) / days_span),
+        "protein": round(float(row.pro or 0) / days_span, 1),
+        "fat": round(float(row.fat or 0) / days_span, 1),
+        "carbs": round(float(row.carbs or 0) / days_span, 1),
+    }
+
+    # 指南推荐（按性别）；脂肪/碳水按供能比折算克数
+    guide = get_guideline(current_user.gender)
+    cal_ref = guide["calories"]
+    if isinstance(cal_ref, tuple):
+        cal_ref_val = (cal_ref[0] + cal_ref[1]) / 2
+    else:
+        cal_ref_val = cal_ref
+    pro_ref = guide["protein"]
+    pro_ref_val = (pro_ref[0] + pro_ref[1]) / 2 if isinstance(pro_ref, tuple) else pro_ref
+    fat_pct = guide["fat_pct"]
+    fat_ref_val = round(cal_ref_val * (sum(fat_pct) / 2) / 100 / 9, 1)   # 脂肪克 ≈ 热量 × 25% ÷ 9
+    carbs_ref_val = round(cal_ref_val * 0.575 / 4, 1)                     # 碳水克 ≈ 热量 × 57.5% ÷ 4
+
+    guideline = {
+        "calories": cal_ref_val,
+        "protein": pro_ref_val,
+        "fat": fat_ref_val,
+        "carbs": carbs_ref_val,
+    }
+
+    def _status(actual_v: float, ref_v: float) -> str:
+        if ref_v <= 0:
+            return "无参考"
+        ratio = actual_v / ref_v
+        if 0.9 <= ratio <= 1.1:
+            return "正常"
+        return "偏高" if ratio > 1.1 else "偏低"
+
+    status = {
+        "calories": _status(actual["calories"], guideline["calories"]),
+        "protein": _status(actual["protein"], guideline["protein"]),
+        "fat": _status(actual["fat"], guideline["fat"]),
+        "carbs": _status(actual["carbs"], guideline["carbs"]),
+    }
+
+    return {
+        "days": days_span,
+        "gender": current_user.gender,
+        "actual": actual,
+        "guideline": guideline,
+        "status": status,
     }
 
 

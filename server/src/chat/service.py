@@ -340,6 +340,7 @@ class ChatService:
             "add_diet_record": f"正在记录：{args.get('food_name', '')}...",
             "analyze_food_image": "正在分析食物图片...",
             "get_nearby_food": f"正在搜索 {args.get('location', '')} 附近的美食...",
+            "get_daily_nutrition_assessment": "正在评估您的营养摄入（对照膳食指南）...",
         }
         return messages.get(tool_name, f"正在调用 {tool_name}...")
 

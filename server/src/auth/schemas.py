@@ -8,6 +8,10 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
     nickname: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
 
     @field_validator("password")
     @classmethod
@@ -42,6 +46,10 @@ class UserOut(BaseModel):
     email: str
     nickname: str
     avatar_url: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
     is_admin: bool = False
     email_verified: bool = False
 
@@ -51,3 +59,7 @@ class UserOut(BaseModel):
 class UserProfileUpdate(BaseModel):
     nickname: Optional[str] = None
     avatar_url: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
