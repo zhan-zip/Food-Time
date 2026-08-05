@@ -103,19 +103,13 @@ async def update_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """修改个人资料"""
-    if data.nickname is not None:
-        current_user.nickname = data.nickname
-    if data.avatar_url is not None:
-        current_user.avatar_url = data.avatar_url
-    if data.age is not None:
-        current_user.age = data.age
-    if data.gender is not None:
-        current_user.gender = data.gender
-    if data.height_cm is not None:
-        current_user.height_cm = data.height_cm
-    if data.weight_kg is not None:
-        current_user.weight_kg = data.weight_kg
+    """修改个人资料（支持清空档案字段：显式传 null 即置空）"""
+    # 修复：用 exclude_unset 区分「未传」与「传 null 清空」，支持清空档案字段
+    updates = data.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        if field == "nickname" and value is None:
+            continue  # 昵称不允许置空（数据库 NOT NULL）
+        setattr(current_user, field, value)
     await db.flush()
     await db.refresh(current_user)
     return schemas.UserOut.model_validate(current_user)
