@@ -220,6 +220,7 @@ async function handleRegister() {
     const res = await request.post('/auth/register', payload)
     localStorage.setItem('token', res.access_token)
     localStorage.setItem('user', JSON.stringify(res.user))
+    localStorage.setItem('onboard_pending', '1')  // 新用户标记：首页触发引导
     router.push('/')
   } catch (e) {
     errorMsg.value = e.message || '注册失败'

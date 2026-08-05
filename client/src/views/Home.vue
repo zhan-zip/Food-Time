@@ -45,9 +45,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { getRecipes } from '../api/public'
 import FoodImage from '../components/FoodImage.vue'
+import { maybeStartOnboarding } from '../utils/onboarding'
 
 // 视觉美化：每日推荐取广场最近 3 个已审核菜谱（替代静态占位）
 const recommended = ref([])
@@ -62,6 +63,8 @@ onMounted(async () => {
   } finally {
     recommendLoading.value = false
   }
+  // 新用户首次登录：触发引导（等 DOM 渲染完，导航元素已就绪）
+  nextTick(() => maybeStartOnboarding())
 })
 </script>
 
