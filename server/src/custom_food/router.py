@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api/custom", tags=["自定义食物"])
 class SuggestRequest(BaseModel):
     ingredients: list[str] = Field(default_factory=list, description="主料名称列表")
     seasonings: list[str] = Field(default_factory=list, description="调料名称列表")
+    force_ai: bool = Field(default=False, description="强制生成 AI 建议（食材识别场景：库匹配 + AI 建议都返回）")
 
 
 class SaveRecipeRequest(BaseModel):
@@ -83,19 +84,23 @@ async def suggest_recipe(
 
         matched_recipes.sort(key=lambda x: x["match_count"], reverse=True)
 
-    # 如果有匹配结果，直接返回
-    if matched_recipes:
+    # 库匹配结果（最多 5 个）
+    matched_for_result = matched_recipes[:5] if matched_recipes else []
+
+    # 有匹配且未强制 AI 时，直接返回库菜谱（DIY 厨房原行为）
+    if matched_recipes and not body.force_ai:
         return {
             "source": "database",
-            "matched": matched_recipes[:5],  # 最多 5 个匹配
+            "matched": matched_for_result,
             "ai_suggestion": None,
         }
+    # 无匹配 或 force_ai（食材识别）→ 继续生成 AI 建议，同时带上库匹配结果
 
     # ---- ② DeepSeek 回退：生成烹饪建议 ----
     if not deepseek.is_configured:
         return {
             "source": "fallback",
-            "matched": [],
+            "matched": matched_for_result,
             "ai_suggestion": {
                 "name": f"创意料理（{', '.join(body.ingredients)}）",
                 "cooking_method": "wok",
@@ -134,14 +139,14 @@ async def suggest_recipe(
     except Exception as e:
         return {
             "source": "error",
-            "matched": [],
+            "matched": matched_for_result,
             "error": f"AI 服务不可用: {e}",
         }
 
     if not ai_resp:
         return {
             "source": "error",
-            "matched": [],
+            "matched": matched_for_result,
             "error": "AI 未返回有效建议",
         }
 
@@ -155,13 +160,13 @@ async def suggest_recipe(
             try:
                 suggestion = json.loads(match.group(0))
             except json.JSONDecodeError:
-                return {"source": "error", "matched": [], "error": "AI 返回格式异常"}
+                return {"source": "error", "matched": matched_for_result, "error": "AI 返回格式异常"}
         else:
-            return {"source": "error", "matched": [], "error": "AI 返回格式异常"}
+            return {"source": "error", "matched": matched_for_result, "error": "AI 返回格式异常"}
 
     return {
         "source": "ai",
-        "matched": [],
+        "matched": matched_for_result,
         "ai_suggestion": {
             "name": suggestion.get("name", ""),
             "cooking_method": suggestion.get("cooking_method", "wok"),
@@ -172,6 +177,33 @@ async def suggest_recipe(
             "nutrition_tip": suggestion.get("nutrition_tip", ""),
         },
     }
+
+
+# ============================================================
+# POST /api/custom/recognize-ingredients — 识别图片食材
+# ============================================================
+@router.post("/recognize-ingredients")
+async def recognize_ingredients_route(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """识别图片中台面上的食材原料（Qwen VL 多模态）"""
+    image = (body.get("image") or "").strip()
+    if not image:
+        return {"success": False, "error": "请提供图片"}
+
+    from src.services.qwen import qwen_vl, is_safe_image_url
+    # 兼容带/不带 data: 前缀（与记账 OCR 一致）
+    image_url = image if image.startswith("data:") else f"data:image;base64,{image}"
+    if not await is_safe_image_url(image_url):
+        return {"success": False, "error": "图片不合法或存在安全风险"}
+    if not qwen_vl.is_configured:
+        return {"success": False, "error": "Qwen VL 未配置，请在 .env 填写 QWEN_API_KEY"}
+
+    result, err = await qwen_vl.recognize_ingredients(image_url)
+    if result is None:
+        return {"success": False, "error": err or "识别失败，请换一张更清晰的图片"}
+    return {"success": True, **result}
 
 
 # ============================================================

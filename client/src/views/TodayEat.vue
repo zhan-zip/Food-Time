@@ -83,7 +83,54 @@
 
     <!-- ====== Tab 2: 辅助决策 ====== -->
     <div v-show="tab === 'decide'" class="decide-stack">
-      <!-- ① 筛选条件 FR-21 -->
+      <!-- ① 食材识别（拍照/上传 → Qwen 识别 → 库匹配 → AI 建议） -->
+      <div class="card decide-card">
+        <h3 class="decide-card-title">&#x1F4F7; 食材识别</h3>
+
+        <input ref="ingInput" type="file" accept="image/*" capture="environment" style="display:none" @change="onIngredientUpload" />
+
+        <div v-if="ingLoading" class="text-center text-muted text-sm" style="padding:24px 0">🤖 正在识别食材...</div>
+        <div v-else-if="!recognizedIngredients.length" class="text-center text-muted text-sm" style="padding:24px 0; cursor:pointer" @click="triggerIngUpload">
+          📷 拍照或上传食材照片<br/><span style="font-size:12px">AI 自动识别有什么食材</span>
+        </div>
+
+        <template v-else>
+          <p class="text-sm text-secondary" style="margin-bottom:8px">识别到以下食材（点击可移除）：</p>
+          <div class="ing-chip-list">
+            <span v-for="(ing, i) in recognizedIngredients" :key="'ing' + i" class="tag tag-primary ing-chip" @click="removeIngredient(i)">{{ ing }} ✕</span>
+          </div>
+          <p v-if="recognizedSeasonings.length" class="text-sm text-secondary" style="margin:8px 0 4px">调料：</p>
+          <div class="ing-chip-list">
+            <span v-for="(s, i) in recognizedSeasonings" :key="'sea' + i" class="tag tag-default ing-chip" @click="removeSeasoning(i)">{{ s }} ✕</span>
+          </div>
+          <button class="btn btn-primary btn-sm" style="width:100%; margin-top:10px" :disabled="suggestLoading" @click="getSuggestionFromImage">
+            {{ suggestLoading ? 'AI 匹配中...' : '🔍 获取烹饪建议' }}
+          </button>
+          <button class="btn btn-outline btn-sm" style="width:100%; margin-top:6px" @click="resetIngredient">🔄 重新拍照</button>
+        </template>
+
+        <div v-if="ingSuggestion" class="ing-suggestion" style="margin-top:12px">
+          <div v-if="ingSuggestion.matched && ingSuggestion.matched.length">
+            <p class="text-sm text-secondary" style="margin-bottom:6px">🍽️ 库中已找到相似菜谱：</p>
+            <div v-for="m in ingSuggestion.matched" :key="m.id" class="matched-recipe">
+              <strong>{{ m.name }}</strong>
+              <span v-if="m.cuisine" class="tag tag-default tag-sm" style="margin-left:6px">{{ m.cuisine }}</span>
+              <span v-if="m.calories_per_100g" class="text-muted text-xs" style="margin-left:6px">{{ m.calories_per_100g }} kcal/100g</span>
+            </div>
+          </div>
+          <div v-if="ingSuggestion.ai_suggestion" class="ai-suggestion-box">
+            <p class="text-sm" style="font-weight:600; margin-bottom:6px">{{ ingSuggestion.ai_suggestion.name }}</p>
+            <p class="text-xs text-muted" style="margin-bottom:6px">{{ ingSuggestion.ai_suggestion.cooking_method_label }} · {{ ingSuggestion.ai_suggestion.estimated_time }} · 约 {{ ingSuggestion.ai_suggestion.estimated_calories }} kcal/100g</p>
+            <ol class="text-sm" style="padding-left:18px; line-height:1.7">
+              <li v-for="(step, si) in ingSuggestion.ai_suggestion.steps" :key="si">{{ step }}</li>
+            </ol>
+            <p v-if="ingSuggestion.ai_suggestion.nutrition_tip" class="text-xs text-muted" style="margin-top:6px">💡 {{ ingSuggestion.ai_suggestion.nutrition_tip }}</p>
+          </div>
+          <p v-if="ingSuggestion.error" class="text-sm" style="color:var(--color-danger); margin-top:8px">{{ ingSuggestion.error }}</p>
+        </div>
+      </div>
+
+      <!-- ② 筛选条件 FR-21 -->
       <div class="card decide-card">
           <h3 class="decide-card-title">&#x1F4CB; 筛选条件</h3>
 
@@ -266,6 +313,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 import { createDietRecord } from '@/api/diet'
 import { getFavoriteRecipes } from '@/api/public'
+import { suggestRecipe, recognizeIngredients } from '@/api/diy'
 import SpinWheel from '@/components/today/SpinWheel.vue'
 import FoodImage from '@/components/FoodImage.vue'
 import { useRouter } from 'vue-router'
@@ -291,6 +339,78 @@ const spicyOptions = [
   { value: 'medium', label: '中辣' },
   { value: 'high', label: '重辣' },
 ]
+
+// ====== 食材识别（拍照/上传 → Qwen 识别 → 库匹配 → AI 建议） ======
+const ingInput = ref(null)
+const ingLoading = ref(false)
+const recognizedIngredients = ref([])
+const recognizedSeasonings = ref([])
+const suggestLoading = ref(false)
+const ingSuggestion = ref(null)
+
+function triggerIngUpload() {
+  if (ingInput.value) ingInput.value.click()
+}
+
+function onIngredientUpload(e) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = async () => {
+    const dataUrl = reader.result
+    const base64 = dataUrl.split(',')[1] || dataUrl
+    ingLoading.value = true
+    ingSuggestion.value = null
+    try {
+      const res = await recognizeIngredients(base64)
+      if (!res.success) {
+        alert(res.error || '识别失败')
+        recognizedIngredients.value = []
+        recognizedSeasonings.value = []
+      } else {
+        recognizedIngredients.value = res.ingredients || []
+        recognizedSeasonings.value = res.seasonings || []
+      }
+    } catch (err) {
+      alert('识别失败：' + (err.message || '请重试'))
+      recognizedIngredients.value = []
+    } finally {
+      ingLoading.value = false
+      if (ingInput.value) ingInput.value.value = ''
+    }
+  }
+  reader.readAsDataURL(file)
+}
+
+function removeIngredient(i) {
+  recognizedIngredients.value.splice(i, 1)
+}
+function removeSeasoning(i) {
+  recognizedSeasonings.value.splice(i, 1)
+}
+function resetIngredient() {
+  recognizedIngredients.value = []
+  recognizedSeasonings.value = []
+  ingSuggestion.value = null
+}
+
+async function getSuggestionFromImage() {
+  if (!recognizedIngredients.value.length) return alert('请先识别出食材')
+  suggestLoading.value = true
+  ingSuggestion.value = null
+  try {
+    const res = await suggestRecipe({
+      ingredients: recognizedIngredients.value,
+      seasonings: recognizedSeasonings.value,
+      forceAi: true,
+    })
+    ingSuggestion.value = res
+  } catch (err) {
+    alert('获取建议失败：' + (err.message || '请重试'))
+  } finally {
+    suggestLoading.value = false
+  }
+}
 
 // ====== 转盘 FR-22 ======
 const customFoodInput = ref('')
@@ -757,6 +877,28 @@ async function submitRecord() {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: var(--spacing-md);
+}
+/* ====== 食材识别卡片 ====== */
+.ing-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ing-chip {
+  cursor: pointer;
+}
+.matched-recipe {
+  padding: 6px 10px;
+  background: var(--color-bg-warm);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.ai-suggestion-box {
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--color-bg-warm);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 6px;
 }
 .custom-filter-bar {
   display: flex;

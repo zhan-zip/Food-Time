@@ -173,5 +173,58 @@ class QwenVLClient:
         except Exception as e:
             return None, str(e)
 
+    async def recognize_ingredients(self, image_url: str) -> tuple[dict | None, str | None]:
+        """识别图片中摆放在台面上的食材原料（多食材）。返回 (result_dict, error_msg)"""
+        if not self.is_configured:
+            return None, "Qwen VL 未配置"
+        if not await is_safe_image_url(image_url):
+            return None, "图片 URL 不合法或存在安全风险（已拦截）"
+
+        try:
+            resp = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image_url},
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                "请识别图片中摆放在台面/桌面上散放的所有食材原料"
+                                "（蔬菜、肉类、海鲜、蛋奶、豆制品、菌菇、水果等）以及明显的调料。\n"
+                                "只列出你能明确辨认的食材，看不清的不要猜测。\n"
+                                '只返回 JSON：{"ingredients": ["食材1", "食材2", ...], "seasonings": ["盐", "酱油", ...]}\n'
+                                "调料没有则 seasonings 为空数组。只返回 JSON，不要包含其他文字。"
+                            ),
+                        },
+                    ],
+                }],
+                max_tokens=400,
+                temperature=0.1,
+            )
+            content = resp.choices[0].message.content or ""
+            import json
+            try:
+                result = json.loads(content)
+            except json.JSONDecodeError:
+                import re
+                match = re.search(r'\{[\s\S]*\}', content)
+                if match:
+                    result = json.loads(match.group(0))
+                else:
+                    return None, "无法解析 AI 返回内容"
+            ingredients = result.get("ingredients") or []
+            seasonings = result.get("seasonings") or []
+            if not isinstance(ingredients, list):
+                ingredients = []
+            if not isinstance(seasonings, list):
+                seasonings = []
+            return {"ingredients": ingredients, "seasonings": seasonings}, None
+        except Exception as e:
+            return None, str(e)
+
 
 qwen_vl = QwenVLClient()
