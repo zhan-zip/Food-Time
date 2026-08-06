@@ -2,6 +2,21 @@
   <div class="page container page-section">
     <h2 class="section-title">Agent 助手</h2>
 
+    <!-- 工具能力卡片 -->
+    <div class="agent-tools" style="margin-top: var(--spacing-lg); margin-bottom: var(--spacing-lg);">
+      <div class="agent-tools-head">
+        <span class="agent-tools-title">🛠 Agent 工具能力</span>
+        <span class="text-xs text-muted">我能调用以下工具为你服务</span>
+      </div>
+      <div class="agent-tools-list">
+        <button v-for="t in agentTools" :key="t.name" class="agent-tool" @click="sendPrompt(t.prompt)">
+          <span class="agent-tool-name">{{ t.name }}</span>
+          <span class="agent-tool-cn">{{ t.cn }}</span>
+          <span class="agent-tool-desc">{{ t.desc }}</span>
+        </button>
+      </div>
+    </div>
+
     <div class="chat-container">
       <div class="chat-messages" ref="msgContainer">
         <div v-if="messages.length === 0" class="chat-welcome">
@@ -90,21 +105,6 @@
         />
         <button class="btn btn-primary" @click="send" :disabled="loading || !input.trim()">
           发送
-        </button>
-      </div>
-    </div>
-
-    <!-- 工具能力卡片 -->
-    <div class="agent-tools" style="margin-top: var(--spacing-xl);">
-      <div class="agent-tools-head">
-        <span class="agent-tools-title">🛠 Agent 工具能力</span>
-        <span class="text-xs text-muted">我能调用以下工具为你服务</span>
-      </div>
-      <div class="agent-tools-list">
-        <button v-for="t in agentTools" :key="t.name" class="agent-tool" @click="sendPrompt(t.prompt)">
-          <span class="agent-tool-name">{{ t.name }}</span>
-          <span class="agent-tool-cn">{{ t.cn }}</span>
-          <span class="agent-tool-desc">{{ t.desc }}</span>
         </button>
       </div>
     </div>
