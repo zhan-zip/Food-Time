@@ -36,14 +36,17 @@ def generate_verification_code() -> str:
 
 async def create_user(
     db: AsyncSession, email: str, password: str, nickname: str | None = None,
+    avatar_url: str | None = None,
     age: int | None = None, gender: str | None = None,
     height_cm: float | None = None, weight_kg: float | None = None,
+    email_verified: bool = False,
 ) -> User:
     user = User(
         email=email,
         password_hash=hash_password(password),
         nickname=nickname or email.split("@")[0],
-        email_verified=False,
+        avatar_url=avatar_url,
+        email_verified=email_verified,
         age=age, gender=gender, height_cm=height_cm, weight_kg=weight_kg,
     )
     db.add(user)
@@ -101,6 +104,22 @@ async def verify_email_code(db: AsyncSession, email: str, code: str) -> bool:
     return True
 
 
+async def validate_registration_code(db: AsyncSession, email: str, code: str) -> bool:
+    """校验注册/重置验证码（查 email_verifications，通过后标记已用）"""
+    result = await db.execute(
+        select(EmailVerification)
+        .where(EmailVerification.email == email)
+        .where(EmailVerification.code == code)
+        .where(EmailVerification.used == False)
+        .where(EmailVerification.expires_at > datetime.now(timezone.utc))
+    )
+    ev = result.scalar_one_or_none()
+    if ev is None:
+        return False
+    ev.used = True
+    return True
+
+
 # ---------- 管理员初始化 ----------
 
 async def init_admin(db: AsyncSession):
@@ -126,3 +145,23 @@ async def init_admin(db: AsyncSession):
             print("[INIT] 检测到管理员仍使用默认密码 admin123，已重置为 .env 配置的新密码")
         else:
             print(f"[INIT] 管理员已存在: {settings.ADMIN_EMAIL}")
+
+
+# ---------- 密码管理 ----------
+
+async def reset_password(db: AsyncSession, email: str, new_password: str) -> bool:
+    """忘记密码：验证码校验通过后重置密码"""
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user is None:
+        return False
+    user.password_hash = hash_password(new_password)
+    return True
+
+
+async def change_password(user: User, old_password: str, new_password: str) -> bool:
+    """修改密码：校验旧密码后更新"""
+    if not verify_password(old_password, user.password_hash):
+        return False
+    user.password_hash = hash_password(new_password)
+    return True

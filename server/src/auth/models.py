@@ -1,7 +1,7 @@
 ﻿"""用户认证模型"""
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, func
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, func
 from src.database import Base
 
 
@@ -12,7 +12,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     nickname = Column(String(100), nullable=False)
-    avatar_url = Column(String(500), nullable=True)
+    avatar_url = Column(Text, nullable=True)  # 头像 base64（前端压缩后存）
     age = Column(Integer, nullable=True)
     gender = Column(String(10), nullable=True)  # 'male' / 'female'
     height_cm = Column(Float, nullable=True)

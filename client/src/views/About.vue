@@ -4,7 +4,7 @@
 
     <div class="profile-card card">
       <div class="profile-header">
-        <span class="profile-avatar">&#x1F464;</span>
+        <img :src="user?.avatar_url || '/static/default-avatar.png'" class="profile-avatar" alt="头像" />
         <div>
           <h2>{{ user?.nickname || '未登录' }}</h2>
           <p class="text-sm text-secondary">{{ user?.email }}</p>
@@ -18,7 +18,10 @@
           <span v-if="user?.weight_kg" class="tag tag-default">体重 {{ user.weight_kg }} kg</span>
           <span v-if="!user?.age && !user?.gender" class="text-xs text-muted">未填写档案（按成人通用标准推荐）</span>
         </div>
-        <button class="btn btn-outline btn-sm" @click="openEdit">&#x270F;&#xFE0F; 编辑档案</button>
+        <div class="profile-actions">
+          <button class="btn btn-outline btn-sm" @click="openEdit">&#x270F;&#xFE0F; 编辑档案</button>
+          <button class="btn btn-outline btn-sm" @click="showChangePwd = true">&#x1F511; 修改密码</button>
+        </div>
       </div>
     </div>
 
@@ -125,6 +128,17 @@
         <h3>编辑个人信息</h3>
         <p class="text-xs text-muted" style="margin-bottom: 12px">昵称必填；个人档案（用于个性化营养建议）可留空</p>
         <div class="form-group">
+          <label class="form-label">头像</label>
+          <div class="avatar-upload-row">
+            <img :src="editAvatarPreview || '/static/default-avatar.png'" class="avatar-preview" alt="头像" />
+            <div>
+              <input ref="editAvatarInput" type="file" accept="image/*" style="display:none" @change="onEditAvatar" />
+              <button type="button" class="btn btn-outline btn-sm" @click="editAvatarInput.click()">选择图片</button>
+              <button v-if="editAvatarPreview" type="button" class="btn btn-outline btn-sm" @click="clearEditAvatar">移除</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
           <label class="form-label">昵称</label>
           <input v-model="editForm.nickname" type="text" class="input" placeholder="给自己起个名字" />
         </div>
@@ -155,6 +169,27 @@
         <p v-if="saveMsg" class="text-sm" :style="{ color: saveOk ? '#52c41a' : '#e74c3c', marginTop: '8px' }">{{ saveMsg }}</p>
       </div>
     </div>
+
+    <!-- 修改密码弹窗 -->
+    <div v-if="showChangePwd" class="modal-overlay" @click.self="showChangePwd = false">
+      <div class="modal-content card">
+        <h3 style="margin-bottom:4px">修改密码</h3>
+        <p class="text-xs text-muted" style="margin-bottom:12px">验证旧密码后设置新密码</p>
+        <div class="form-group">
+          <label class="form-label">旧密码</label>
+          <input v-model="pwdForm.oldPassword" type="password" class="input" placeholder="请输入当前密码" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">新密码</label>
+          <input v-model="pwdForm.newPassword" type="password" class="input" placeholder="至少6位，包含字母或数字" />
+        </div>
+        <p v-if="pwdMsg" class="text-sm" :style="{ color: pwdOk ? '#52c41a' : '#e74c3c', marginBottom: '8px' }">{{ pwdMsg }}</p>
+        <div class="modal-actions">
+          <button class="btn btn-outline" @click="showChangePwd = false">取消</button>
+          <button class="btn btn-primary" @click="handleChangePwd" :disabled="pwdLoading">{{ pwdLoading ? '保存中...' : '确认修改' }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -162,7 +197,7 @@
 import { ref, computed, reactive, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getPreferences, getNutrition, getNutritionAssessment } from '@/api/diet'
-import { updateProfile } from '@/api/auth'
+import { updateProfile, changePassword } from '@/api/auth'
 
 const router = useRouter()
 const user = ref(null)
@@ -186,7 +221,9 @@ const showEdit = ref(false)
 const saving = ref(false)
 const saveMsg = ref('')
 const saveOk = ref(false)
-const editForm = reactive({ nickname: '', age: '', gender: '', height_cm: '', weight_kg: '' })
+const editForm = reactive({ nickname: '', avatar_url: '', age: '', gender: '', height_cm: '', weight_kg: '' })
+const editAvatarPreview = ref('')
+const editAvatarInput = ref(null)
 
 const genderLabel = computed(() => {
   if (user.value?.gender === 'male') return '男'
@@ -196,6 +233,8 @@ const genderLabel = computed(() => {
 
 function openEdit() {
   editForm.nickname = user.value?.nickname ?? ''
+  editForm.avatar_url = user.value?.avatar_url ?? ''
+  editAvatarPreview.value = user.value?.avatar_url ?? ''
   editForm.age = user.value?.age ?? ''
   editForm.gender = user.value?.gender ?? ''
   editForm.height_cm = user.value?.height_cm ?? ''
@@ -216,6 +255,7 @@ async function saveProfile() {
   try {
     const payload = {
       nickname: editForm.nickname.trim(),
+      avatar_url: editForm.avatar_url || null,
       age: editForm.age ? Number(editForm.age) : null,
       gender: editForm.gender || null,
       height_cm: editForm.height_cm ? Number(editForm.height_cm) : null,
@@ -233,6 +273,81 @@ async function saveProfile() {
     saveOk.value = false
   } finally {
     saving.value = false
+  }
+}
+
+// ========== 头像更换（压缩成正方形 base64） ==========
+function compressImage(file, maxSize = 256) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        const side = Math.min(img.width, img.height)
+        const canvas = document.createElement('canvas')
+        canvas.width = maxSize
+        canvas.height = maxSize
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, maxSize, maxSize)
+        resolve(canvas.toDataURL('image/jpeg', 0.8))
+      }
+      img.onerror = reject
+      img.src = e.target.result
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function onEditAvatar(e) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  if (file.size > 5 * 1024 * 1024) {
+    alert('图片不能超过 5MB')
+    if (editAvatarInput.value) editAvatarInput.value.value = ''
+    return
+  }
+  try {
+    const dataUrl = await compressImage(file)
+    editForm.avatar_url = dataUrl
+    editAvatarPreview.value = dataUrl
+  } catch {
+    alert('图片处理失败，请换一张')
+  } finally {
+    if (editAvatarInput.value) editAvatarInput.value.value = ''
+  }
+}
+
+function clearEditAvatar() {
+  editForm.avatar_url = ''
+  editAvatarPreview.value = ''
+  if (editAvatarInput.value) editAvatarInput.value.value = ''
+}
+
+// ========== 修改密码 ==========
+const showChangePwd = ref(false)
+const pwdForm = reactive({ oldPassword: '', newPassword: '' })
+const pwdLoading = ref(false)
+const pwdMsg = ref('')
+const pwdOk = ref(false)
+
+async function handleChangePwd() {
+  if (!pwdForm.oldPassword) return alert('请输入旧密码')
+  if (!pwdForm.newPassword || pwdForm.newPassword.length < 6) return alert('新密码至少 6 位')
+  pwdLoading.value = true
+  pwdMsg.value = ''
+  try {
+    await changePassword({ old_password: pwdForm.oldPassword, new_password: pwdForm.newPassword })
+    pwdMsg.value = '密码已修改'
+    pwdOk.value = true
+    pwdForm.oldPassword = ''
+    pwdForm.newPassword = ''
+    setTimeout(() => { showChangePwd.value = false; pwdMsg.value = '' }, 1200)
+  } catch (e) {
+    pwdMsg.value = e.message || '修改失败'
+    pwdOk.value = false
+  } finally {
+    pwdLoading.value = false
   }
 }
 
@@ -569,14 +684,33 @@ function handleLogout() {
   gap: var(--spacing-lg);
 }
 .profile-avatar {
-  font-size: 48px;
   width: 64px;
   height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--color-primary);
+  flex-shrink: 0;
+}
+.profile-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+.avatar-upload-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: var(--color-bg-warm);
+  gap: var(--spacing-md);
+}
+.avatar-preview {
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--color-primary);
+  flex-shrink: 0;
+}
+.avatar-upload-row .btn + .btn {
+  margin-left: var(--spacing-xs);
 }
 .card-title {
   font-size: var(--font-size-base);

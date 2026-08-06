@@ -5,6 +5,20 @@
       <p class="auth-subtitle text-secondary">开启你的食光之旅</p>
 
       <form @submit.prevent="handleRegister" class="auth-form" novalidate>
+        <!-- 头像（选填） -->
+        <div class="form-group avatar-upload">
+          <label class="form-label">头像</label>
+          <div class="avatar-upload-row">
+            <img :src="avatarPreview || '/static/default-avatar.png'" class="avatar-preview" alt="头像" />
+            <div>
+              <input ref="avatarInput" type="file" accept="image/*" style="display:none" @change="onAvatarChange" />
+              <button type="button" class="btn btn-outline btn-sm" @click="avatarInput.click()">选择图片</button>
+              <button v-if="avatarPreview" type="button" class="btn btn-outline btn-sm" @click="clearAvatar">移除</button>
+              <p class="field-hint">选填，不上传则使用默认头像</p>
+            </div>
+          </div>
+        </div>
+
         <!-- 昵称 -->
         <div class="form-group">
           <label class="form-label">昵称</label>
@@ -117,7 +131,9 @@ const codeSent = ref(false)
 const countdown = ref(0)
 const errorMsg = ref('')
 const errors = reactive({ nickname: '', email: '', password: '', code: '' })
-const form = reactive({ email: '', password: '', nickname: '', code: '', age: '', gender: '', height_cm: '', weight_kg: '' })
+const form = reactive({ email: '', password: '', nickname: '', code: '', avatar_url: '', age: '', gender: '', height_cm: '', weight_kg: '' })
+const avatarPreview = ref('')
+const avatarInput = ref(null)
 
 function clearError(field) {
   errors[field] = ''
@@ -171,6 +187,54 @@ function validate() {
   return true
 }
 
+// ========== 头像上传（压缩成正方形 base64，选填） ==========
+function compressImage(file, maxSize = 256) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        const side = Math.min(img.width, img.height)
+        const canvas = document.createElement('canvas')
+        canvas.width = maxSize
+        canvas.height = maxSize
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, maxSize, maxSize)
+        resolve(canvas.toDataURL('image/jpeg', 0.8))
+      }
+      img.onerror = reject
+      img.src = e.target.result
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function onAvatarChange(e) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  if (file.size > 5 * 1024 * 1024) {
+    alert('图片不能超过 5MB')
+    if (avatarInput.value) avatarInput.value.value = ''
+    return
+  }
+  try {
+    const dataUrl = await compressImage(file)
+    form.avatar_url = dataUrl
+    avatarPreview.value = dataUrl
+  } catch {
+    alert('图片处理失败，请换一张')
+  } finally {
+    if (avatarInput.value) avatarInput.value.value = ''
+  }
+}
+
+function clearAvatar() {
+  form.avatar_url = ''
+  avatarPreview.value = ''
+  if (avatarInput.value) avatarInput.value.value = ''
+}
+
 // ========== 发送验证码 ==========
 async function sendCode() {
   errorMsg.value = ''
@@ -212,6 +276,8 @@ async function handleRegister() {
       email: form.email,
       password: form.password,
       nickname: form.nickname,
+      code: form.code,
+      avatar_url: form.avatar_url || undefined,
       age: form.age ? Number(form.age) : undefined,
       gender: form.gender || undefined,
       height_cm: form.height_cm ? Number(form.height_cm) : undefined,
@@ -231,6 +297,22 @@ async function handleRegister() {
 </script>
 
 <style scoped>
+.avatar-upload-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+.avatar-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--color-primary);
+  flex-shrink: 0;
+}
+.avatar-upload-row .btn + .btn {
+  margin-left: var(--spacing-xs);
+}
 .profile-optional {
   border-top: 1px dashed var(--color-divider);
   padding-top: var(--spacing-md);
