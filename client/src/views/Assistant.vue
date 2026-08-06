@@ -59,6 +59,10 @@
           <div class="chat-bubble-body">
             <div v-if="msg.role === 'user'" class="chat-bubble-text">{{ msg.content }}</div>
             <div v-else class="chat-bubble-text markdown" v-html="renderMarkdown(msg.content)"></div>
+            <div v-if="msg.role === 'assistant' && getDishes(msg.content).length" class="eat-dishes">
+              <span class="text-xs text-muted">记录我吃了：</span>
+              <button v-for="d in getDishes(msg.content)" :key="d" class="tag tag-primary tag-sm eat-dish-btn" @click="eatDish(d)">🍽 {{ d }}</button>
+            </div>
             <div v-if="msg.tooling" class="tool-indicator tooling">&#x1F50D; {{ msg.toolMsg }}</div>
             <div v-else-if="msg.toolMsg && !msg.content" class="tool-indicator tool-done">&#x2705; {{ msg.toolMsg }}</div>
           </div>
@@ -99,7 +103,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
 import MarkdownIt from 'markdown-it'
-import { getPreferences, getNutrition } from '@/api/diet'
+import { getPreferences, getNutrition, createDietRecord } from '@/api/diet'
 
 // 轻量 markdown 渲染（html:false 防 XSS，支持粗体/列表/标题/链接）
 const md = new MarkdownIt({ html: false, linkify: true })
@@ -144,6 +148,42 @@ function sendPrompt(p) {
 
 function renderMarkdown(content) {
   return md.render(content || '')
+}
+
+// 从 AI 回复中提取加粗菜名（**番茄炒蛋**），供「记录我吃了」
+function getDishes(content) {
+  const re = /\*\*([^*\n]+)\*\*/g
+  const STOP = ['推荐理由', '做法', '小贴士', '注意', '建议', '营养', '热量', '步骤', '食材', '调料', '为什么', '总结', '点评', '提示', '今日', '近期', '搭配']
+  const out = []
+  let m
+  while ((m = re.exec(content || ''))) {
+    let name = m[1].trim().replace(/^\d+[.、)）\s]+/, '').replace(/[（(].*$/, '').trim()
+    if (name.length < 2 || name.length > 12) continue
+    if (STOP.some(s => name.includes(s))) continue
+    if (!out.includes(name)) out.push(name)
+  }
+  return out.slice(0, 6)
+}
+
+// 一键记录「我吃了这个」
+async function eatDish(name) {
+  const token = localStorage.getItem('token')
+  if (!token) return alert('请先登录')
+  try {
+    const res = await fetch('/api/foods?keyword=' + encodeURIComponent(name) + '&page_size=5', {
+      headers: { Authorization: 'Bearer ' + token },
+    })
+    const data = await res.json()
+    const items = (data && data.items) || []
+    if (!items.length) { alert('未在食物库找到「' + name + '」'); return }
+    const food = items[0]
+    const qty = prompt('「' + food.name + '」吃了多少克？（默认 150）', '150')
+    const grams = Math.max(1, Number(qty) || 150)
+    await createDietRecord({ food_id: food.id, meal_type: 'lunch', quantity_g: grams })
+    alert('已记录：' + food.name + ' ' + grams + 'g（午餐）')
+  } catch (e) {
+    alert('记录失败：' + (e.message || '请重试'))
+  }
 }
 
 // ========== 为你推荐（个性化数据面板） ==========
@@ -469,6 +509,17 @@ function scrollBottom() {
 .rec-result p { margin: 0 0 6px; }
 .rec-result ul, .rec-result ol { padding-left: 18px; margin: 4px 0; }
 .rec-result li { margin: 3px 0; }
+/* 记录我吃了 */
+.eat-dishes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.eat-dish-btn {
+  cursor: pointer;
+}
 .chat-bubble--user .chat-bubble-text {
   background: rgba(217, 161, 91, 0.15);
   color: var(--color-text);

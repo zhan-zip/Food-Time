@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # 高德地图 Web 服务（附近美食 POI 搜索，复用前端定位 Key）
     AMAP_KEY: str = ""
 
+    # Tavily 联网搜索（AI 实时搜索，https://tavily.com 免费申请）
+    TAVILY_API_KEY: str = ""
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 

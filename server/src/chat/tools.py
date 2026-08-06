@@ -172,6 +172,20 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_web_search",
+            "description": "实时联网搜索最新信息（菜谱、餐厅、新闻、营养知识等）。当用户需要最新/实时信息或库中查不到时调用。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "搜索关键词"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_daily_nutrition_assessment",
             "description": "评估用户近N天饮食摄入，对照《中国居民膳食指南(2022)》成人推荐量给出达标/偏高/偏低结论。当用户问'我吃得健不健康/营养够不够/该怎么调整饮食'时调用。",
             "parameters": {
@@ -202,6 +216,7 @@ TOOLS_README = """【可用工具清单】
 9. analyze_food_image(image_url) — 分析食物图片
 10. get_nearby_food(location, cuisine?) — 附近食物推荐（选做）
 11. get_daily_nutrition_assessment(days?) — 评估近N天饮食摄入，对照《中国居民膳食指南(2022)》推荐量（达标/偏高/偏低）
+12. get_web_search(query) — 实时联网搜索（最新资讯/菜谱/店铺/营养知识），当需要最新信息时调用
 
 【工具调用规则】
 - 涉及食物营养数据 → 必须调用 search_foods 或 get_food_nutrition
@@ -529,6 +544,36 @@ async def execute_tool(
                 lines.append(f"- {name}（{typ}{rating}）{address}")
             return (f"[附近美食 · {location}]\n" + "\n".join(lines)
                     + "\n\n请基于以上真实 POI 数据，自然地向用户推荐 3 家左右，说明类型与特色。")
+
+        # ---- 工具 12：联网搜索（Tavily） ----
+        elif tool_name == "get_web_search":
+            query = arguments.get("query", "")
+            if not query:
+                return "[错误] 请提供搜索关键词"
+            import httpx
+            from src.config import settings
+            if not settings.TAVILY_API_KEY:
+                return "[提示] 联网搜索服务未配置（TAVILY_API_KEY），无法实时搜索。"
+            try:
+                async with httpx.AsyncClient(timeout=20) as client:
+                    resp = await client.post(
+                        "https://api.tavily.com/search",
+                        json={"api_key": settings.TAVILY_API_KEY, "query": query, "max_results": 5, "search_depth": "basic"},
+                    )
+                    data = resp.json()
+            except Exception as e:
+                return f"[错误] 联网搜索失败: {e}"
+            results = (data or {}).get("results", [])
+            if not results:
+                return f"[搜索结果] 未找到关于「{query}」的实时信息。"
+            lines = []
+            for i, r in enumerate(results[:5]):
+                title = r.get("title", "")
+                url = r.get("url", "")
+                content = (r.get("content", "") or "")[:100]
+                lines.append(f"{i+1}. {title}\n   {url}\n   {content}")
+            return (f"[联网搜索结果 · {query}]\n" + "\n".join(lines)
+                    + "\n\n请基于以上真实搜索结果回答用户，注明信息来源链接。")
 
         # ---- 工具 11：膳食营养评估（对照膳食指南推荐量） ----
         elif tool_name == "get_daily_nutrition_assessment":
