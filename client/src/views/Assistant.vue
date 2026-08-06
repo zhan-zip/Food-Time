@@ -1,12 +1,12 @@
 <template>
   <div class="page container page-section">
-    <h2 class="section-title">AI 助手</h2>
+    <h2 class="section-title">Agent 助手</h2>
 
     <div class="chat-container">
       <div class="chat-messages" ref="msgContainer">
         <div v-if="messages.length === 0" class="chat-welcome">
           <span>&#x1F916;</span>
-          <h3>你好，我是食光记 AI 助手</h3>
+          <h3>你好，我是食光记 Agent 助手</h3>
           <p class="text-secondary">可以帮你：搜索食物、推荐食谱、分析营养、查看账单</p>
         </div>
 
@@ -94,8 +94,23 @@
       </div>
     </div>
 
-    <p class="text-center text-muted text-sm" style="margin-top: var(--spacing-xl);">
-      AI 对话基于 DeepSeek API（SSE 流式 + Tool Calling + RAG 知识库增强）
+    <!-- 工具能力卡片 -->
+    <div class="agent-tools" style="margin-top: var(--spacing-xl);">
+      <div class="agent-tools-head">
+        <span class="agent-tools-title">🛠 Agent 工具能力</span>
+        <span class="text-xs text-muted">我能调用以下工具为你服务</span>
+      </div>
+      <div class="agent-tools-list">
+        <div v-for="t in agentTools" :key="t.name" class="agent-tool">
+          <code class="agent-tool-name">{{ t.name }}</code>
+          <span class="agent-tool-cn">{{ t.cn }}</span>
+          <span class="agent-tool-desc">{{ t.desc }}</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-muted text-sm" style="margin-top: var(--spacing-md);">
+      Agent 基于 DeepSeek API（SSE 流式 + Tool Calling + RAG 知识库增强）
     </p>
   </div>
 </template>
@@ -149,6 +164,22 @@ function sendPrompt(p) {
 function renderMarkdown(content) {
   return md.render(content || '')
 }
+
+// Agent 可用工具清单（展示给用户）
+const agentTools = [
+  { name: 'search_foods', cn: '搜索食物库', desc: '按关键词/分类查食物' },
+  { name: 'get_food_nutrition', cn: '查营养数据', desc: '获取热量/蛋白质/脂肪等' },
+  { name: 'get_user_preferences', cn: '读饮食偏好', desc: '了解你的口味偏好' },
+  { name: 'get_diet_records', cn: '读饮食记录', desc: '查看你最近吃了什么' },
+  { name: 'get_expense_summary', cn: '查账单统计', desc: '看看饮食消费情况' },
+  { name: 'suggest_recipe', cn: '推荐食谱', desc: '综合推荐合适的菜谱' },
+  { name: 'recommend_food', cn: '决策推荐', desc: '帮你决定吃什么' },
+  { name: 'add_diet_record', cn: '记录饮食', desc: '帮你记「我吃了什么」' },
+  { name: 'analyze_food_image', cn: '分析食物图', desc: '识别图片里的食物' },
+  { name: 'get_nearby_food', cn: '附近美食', desc: '搜你所在城市的真实店铺' },
+  { name: 'get_web_search', cn: '实时联网搜索', desc: '查最新资讯/菜谱' },
+  { name: 'get_daily_nutrition_assessment', cn: '膳食营养评估', desc: '对照膳食指南评估摄入' },
+]
 
 // 从 AI 回复中提取加粗菜名（**番茄炒蛋**），供「记录我吃了」
 function getDishes(content) {
@@ -531,6 +562,49 @@ function scrollBottom() {
 .rec-result p { margin: 0 0 6px; }
 .rec-result ul, .rec-result ol { padding-left: 18px; margin: 4px 0; }
 .rec-result li { margin: 3px 0; }
+/* Agent 工具能力卡片 */
+.agent-tools {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  background: var(--color-bg-card);
+}
+.agent-tools-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: var(--spacing-sm);
+}
+.agent-tools-title {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--color-primary-dark);
+}
+.agent-tools-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.agent-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--color-bg-warm);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.agent-tool-name {
+  font-family: monospace;
+  color: var(--color-primary-dark);
+}
+.agent-tool-cn {
+  font-weight: 600;
+}
+.agent-tool-desc {
+  color: var(--color-text-muted);
+}
 /* 记录我吃了 */
 .eat-dishes {
   display: flex;

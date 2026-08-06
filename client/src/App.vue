@@ -126,7 +126,7 @@ const navItems = [
   { to: '/diy',       label: '我的厨房',   icon: '\u{1F52A}' },  // 🔪
   { to: '/square',    label: '美食广场',   icon: '\u{1F30D}' },  // 🌍
   { to: '/expense',   label: '记账',       icon: '\u{1F4B0}' },  // 💰
-  { to: '/assistant', label: 'AI 助手',    icon: '\u{1F916}' },  // 🤖
+  { to: '/assistant', label: 'Agent 助手', icon: '\u{1F916}' },  // 🤖
 ]
 
 function toggleSidebar() {

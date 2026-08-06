@@ -47,7 +47,7 @@ const routes = [
     path: '/assistant',
     name: 'Assistant',
     component: () => import('../views/Assistant.vue'),
-    meta: { title: 'AI 助手' },
+    meta: { title: 'Agent 助手' },
   },
   {
     path: '/about',
