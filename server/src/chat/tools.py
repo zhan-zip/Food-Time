@@ -495,15 +495,40 @@ async def execute_tool(
                 return f"【图片分析结果】\n{result}\n\n接下来你可以用 search_foods 核对营养数据。"
             return "图片分析失败，请尝试用文字描述食物内容。"
 
-        # ---- 工具 10：附近推荐（占位） ----
+        # ---- 工具 10：附近美食（高德 Web 服务 POI 搜索） ----
         elif tool_name == "get_nearby_food":
             location = arguments.get("location", "")
             if not location:
-                return "[错误] 请提供城市或区域名称"
-            return (
-                f"[占位] {location} 附近暂无餐厅数据。\n"
-                "该功能需要接入地图API，为选做功能。可建议用户使用 search_foods 查找当地特色菜。"
-            )
+                return "[错误] 请提供城市或区域名称（如：枣庄）"
+            import httpx
+            from src.config import settings
+            if not settings.AMAP_KEY:
+                return "[提示] 高德地图服务未配置（AMAP_KEY），无法搜索附近美食。"
+            cuisine = arguments.get("cuisine", "")
+            keywords = f"美食 {cuisine}".strip() if cuisine else "美食"
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    resp = await client.get(
+                        "https://restapi.amap.com/v3/place/text",
+                        params={"key": settings.AMAP_KEY, "keywords": keywords, "city": location, "offset": "10", "page": "1", "extensions": "all"},
+                    )
+                    data = resp.json()
+            except Exception as e:
+                return f"[错误] 高德搜索失败: {e}"
+            pois = (data or {}).get("pois", [])
+            if not pois:
+                return f"[结果] 在{location}未找到相关美食信息，建议换个城市或关键词。"
+            lines = []
+            for p in pois[:8]:
+                name = p.get("name", "") or ""
+                typ = str(p.get("type", "")).split(";")[-1] if p.get("type") else "美食"
+                rating = ""
+                if isinstance(p.get("biz_ext"), dict) and p.get("biz_ext", {}).get("rating"):
+                    rating = f" · 评分{p['biz_ext']['rating']}"
+                address = f"（{p.get('address')}）" if p.get("address") else ""
+                lines.append(f"- {name}（{typ}{rating}）{address}")
+            return (f"[附近美食 · {location}]\n" + "\n".join(lines)
+                    + "\n\n请基于以上真实 POI 数据，自然地向用户推荐 3 家左右，说明类型与特色。")
 
         # ---- 工具 11：膳食营养评估（对照膳食指南推荐量） ----
         elif tool_name == "get_daily_nutrition_assessment":

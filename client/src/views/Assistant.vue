@@ -26,6 +26,27 @@
           </div>
         </div>
 
+        <!-- 为你推荐面板（个性化数据） -->
+        <div v-if="showRecPanel" class="rec-panel card" style="margin-bottom: var(--spacing-md);">
+          <div class="rec-panel-header">
+            <span class="rec-panel-title">&#x1F3AF; 为你推荐</span>
+            <button class="btn btn-ghost btn-sm" style="flex-shrink:0" @click="showRecPanel = false" title="收起">✕</button>
+          </div>
+          <div v-if="recLoading" class="text-muted text-sm">加载你的偏好数据...</div>
+          <template v-else>
+            <div class="rec-prefs">
+              <span v-for="t in prefLabels" :key="t" class="tag tag-primary tag-sm">{{ t }}</span>
+            </div>
+            <div v-if="recNutrition.total_days > 0" class="rec-nutrition text-sm">
+              📊 近 {{ recNutrition.total_days }} 天日均：<strong>{{ recNutrition.avg_calories }} kcal</strong> · 蛋白 <strong>{{ recNutrition.avg_protein }}g</strong>
+            </div>
+            <button class="btn btn-primary btn-sm" @click="genRecommend" :disabled="recGenerating" style="margin-top:8px">
+              {{ recGenerating ? '🤖 生成中...' : '🤖 生成个性化推荐' }}
+            </button>
+            <div v-if="recRecommend" class="rec-result" v-html="renderMarkdown(recRecommend)"></div>
+          </template>
+        </div>
+
         <div
           v-for="(msg, idx) in messages"
           :key="idx"
@@ -36,7 +57,8 @@
             {{ msg.role === 'user' ? '\u{1F464}' : '\u{1F916}' }}
           </div>
           <div class="chat-bubble-body">
-            <div class="chat-bubble-text">{{ msg.content }}</div>
+            <div v-if="msg.role === 'user'" class="chat-bubble-text">{{ msg.content }}</div>
+            <div v-else class="chat-bubble-text markdown" v-html="renderMarkdown(msg.content)"></div>
             <div v-if="msg.tooling" class="tool-indicator tooling">&#x1F50D; {{ msg.toolMsg }}</div>
             <div v-else-if="msg.toolMsg && !msg.content" class="tool-indicator tool-done">&#x2705; {{ msg.toolMsg }}</div>
           </div>
@@ -75,7 +97,12 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
+import MarkdownIt from 'markdown-it'
+import { getPreferences, getNutrition } from '@/api/diet'
+
+// 轻量 markdown 渲染（html:false 防 XSS，支持粗体/列表/标题/链接）
+const md = new MarkdownIt({ html: false, linkify: true })
 
 const input = ref('')
 const loading = ref(false)
@@ -115,6 +142,81 @@ function sendPrompt(p) {
   send()
 }
 
+function renderMarkdown(content) {
+  return md.render(content || '')
+}
+
+// ========== 为你推荐（个性化数据面板） ==========
+const showRecPanel = ref(true)
+const recLoading = ref(false)
+const recPref = ref({})
+const recNutrition = ref({})
+const recRecommend = ref('')
+const recGenerating = ref(false)
+
+const prefLabels = computed(() => {
+  const p = recPref.value
+  const labels = []
+  if (p.spicy_level >= 0.5) labels.push('🌶 偏辣')
+  else if (p.total_records > 0) labels.push('🌶 清淡')
+  if (p.fav_cuisines && p.fav_cuisines.length) labels.push(...p.fav_cuisines.map(c => '🍽 ' + c))
+  if (!labels.length && !p.total_records) labels.push('暂无偏好（多记录饮食自动生成）')
+  return labels
+})
+
+async function loadRecData() {
+  recLoading.value = true
+  try {
+    const [pref, nut] = await Promise.all([getPreferences(), getNutrition(7)])
+    recPref.value = pref
+    recNutrition.value = nut
+  } catch { /* 忽略 */ }
+  recLoading.value = false
+}
+
+async function genRecommend() {
+  if (recGenerating.value) return
+  const p = recPref.value
+  const n = recNutrition.value
+  const prefDesc = (p.fav_cuisines && p.fav_cuisines.length) ? p.fav_cuisines.join('、') : '无明确偏好'
+  const nutDesc = n.total_days > 0 ? `近${n.total_days}天日均热量${n.avg_calories}kcal、蛋白质${n.avg_protein}g` : '暂无饮食记录'
+  const city = localStorage.getItem('nearby_city') || ''
+  const content = `请根据我的饮食偏好（${prefDesc}）和近期摄入（${nutDesc}）${city ? `，我在${city}` : ''}，给我 3 条个性化的食物/菜谱推荐，每条用 **加粗菜名** 并说明为什么适合我（引用我的偏好或数据）。用 markdown 列表输出。`
+  recGenerating.value = true
+  recRecommend.value = ''
+  const token = localStorage.getItem('token')
+  try {
+    const resp = await fetch('/api/chat/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ content, session_id: 'rec-panel' }),
+    })
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = '', ev = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      const lines = buf.split('\n')
+      buf = lines.pop() || ''
+      for (const line of lines) {
+        const t = line.trim()
+        if (t.startsWith('event:')) ev = t.slice(6).trim()
+        else if (t.startsWith('data:')) {
+          try {
+            const data = JSON.parse(t.slice(5).trim())
+            if (ev === 'token') recRecommend.value += data.content || ''
+          } catch { /* 忽略 */ }
+        }
+      }
+    }
+  } catch { recRecommend.value = '生成失败，请重试' }
+  recGenerating.value = false
+}
+
+onMounted(loadRecData)
+
 async function send() {
   const text = input.value.trim()
   if (!text || loading.value) return
@@ -123,6 +225,10 @@ async function send() {
   loading.value = true
   await nextTick()
   scrollBottom()
+
+  // 注入用户所在城市（TodayEat 定位结果），供 AI 调用「附近美食」工具
+  const _city = localStorage.getItem('nearby_city')
+  const chatPayload = _city ? `我在${_city}。${text}` : text
 
   const token = localStorage.getItem('token')
   if (!token) {
@@ -138,7 +244,7 @@ async function send() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ content: text, session_id: currentSession.value }),
+      body: JSON.stringify({ content: chatPayload, session_id: currentSession.value }),
     })
 
     if (!response.ok) {
@@ -315,6 +421,54 @@ function scrollBottom() {
   line-height: 1.6;
   white-space: pre-wrap;
 }
+/* markdown 渲染内容样式 */
+.chat-bubble-text.markdown {
+  white-space: normal;
+}
+.chat-bubble-text.markdown p { margin: 0 0 8px; }
+.chat-bubble-text.markdown ul, .chat-bubble-text.markdown ol { padding-left: 18px; margin: 4px 0; }
+.chat-bubble-text.markdown li { margin: 2px 0; }
+.chat-bubble-text.markdown h1, .chat-bubble-text.markdown h2, .chat-bubble-text.markdown h3 { font-size: 14px; margin: 8px 0 4px; }
+.chat-bubble-text.markdown code { background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+.chat-bubble-text.markdown strong { font-weight: 700; }
+.chat-bubble-text.markdown a { color: var(--color-primary); }
+/* 为你推荐面板 */
+.rec-panel {
+  padding: var(--spacing-md);
+  border-left: 3px solid var(--color-primary);
+}
+.rec-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-sm);
+}
+.rec-panel-title {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--color-primary-dark);
+}
+.rec-prefs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.rec-nutrition {
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+.rec-result {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--color-bg-warm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: 1.7;
+}
+.rec-result p { margin: 0 0 6px; }
+.rec-result ul, .rec-result ol { padding-left: 18px; margin: 4px 0; }
+.rec-result li { margin: 3px 0; }
 .chat-bubble--user .chat-bubble-text {
   background: rgba(217, 161, 91, 0.15);
   color: var(--color-text);

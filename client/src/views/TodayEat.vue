@@ -310,7 +310,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import axios from 'axios'
 import { createDietRecord } from '@/api/diet'
 import { getFavoriteRecipes } from '@/api/public'
@@ -463,6 +463,10 @@ function goDetail(food) {
 }
 
 const nearbyCity = ref('')
+// 定位城市存 localStorage，供 AI 助手「附近美食」工具使用
+watch(nearbyCity, (v) => {
+  if (v) localStorage.setItem('nearby_city', v)
+})
 const nearbyLoading = ref(false)
 const nearbyResult = ref('')
 const manualCityMode = ref(false)

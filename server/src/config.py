@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "noreply@food-time.com"
 
+    # 高德地图 Web 服务（附近美食 POI 搜索，复用前端定位 Key）
+    AMAP_KEY: str = ""
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
