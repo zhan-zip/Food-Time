@@ -359,6 +359,8 @@ function processSSEEvent(eventType, data, assistantIdx, toolStatus) {
     case 'tool_start':
       messages.value[assistantIdx].tooling = true
       messages.value[assistantIdx].toolMsg = data.message
+      // 记录工具调用为回复的一部分（markdown 引用格式，多轮保留不消失）
+      messages.value[assistantIdx].content += `> 🔧 ${data.message}\n\n`
       break
     case 'tool_end':
       messages.value[assistantIdx].tooling = false
