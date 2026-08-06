@@ -101,11 +101,11 @@
         <span class="text-xs text-muted">我能调用以下工具为你服务</span>
       </div>
       <div class="agent-tools-list">
-        <div v-for="t in agentTools" :key="t.name" class="agent-tool">
-          <code class="agent-tool-name">{{ t.name }}</code>
+        <button v-for="t in agentTools" :key="t.name" class="agent-tool" @click="sendPrompt(t.prompt)">
+          <span class="agent-tool-name">{{ t.name }}</span>
           <span class="agent-tool-cn">{{ t.cn }}</span>
           <span class="agent-tool-desc">{{ t.desc }}</span>
-        </div>
+        </button>
       </div>
     </div>
 
@@ -165,20 +165,20 @@ function renderMarkdown(content) {
   return md.render(content || '')
 }
 
-// Agent 可用工具清单（展示给用户）
+// Agent 可用工具清单（展示给用户，点击卡片发送对应指令触发工具）
 const agentTools = [
-  { name: 'search_foods', cn: '搜索食物库', desc: '按关键词/分类查食物' },
-  { name: 'get_food_nutrition', cn: '查营养数据', desc: '获取热量/蛋白质/脂肪等' },
-  { name: 'get_user_preferences', cn: '读饮食偏好', desc: '了解你的口味偏好' },
-  { name: 'get_diet_records', cn: '读饮食记录', desc: '查看你最近吃了什么' },
-  { name: 'get_expense_summary', cn: '查账单统计', desc: '看看饮食消费情况' },
-  { name: 'suggest_recipe', cn: '推荐食谱', desc: '综合推荐合适的菜谱' },
-  { name: 'recommend_food', cn: '决策推荐', desc: '帮你决定吃什么' },
-  { name: 'add_diet_record', cn: '记录饮食', desc: '帮你记「我吃了什么」' },
-  { name: 'analyze_food_image', cn: '分析食物图', desc: '识别图片里的食物' },
-  { name: 'get_nearby_food', cn: '附近美食', desc: '搜你所在城市的真实店铺' },
-  { name: 'get_web_search', cn: '实时联网搜索', desc: '查最新资讯/菜谱' },
-  { name: 'get_daily_nutrition_assessment', cn: '膳食营养评估', desc: '对照膳食指南评估摄入' },
+  { name: 'search_foods', cn: '搜索食物库', desc: '按关键词/分类查食物', prompt: '请调用搜索食物库工具，帮我推荐几道食物' },
+  { name: 'get_food_nutrition', cn: '查营养数据', desc: '获取热量/蛋白质/脂肪等', prompt: '请帮我查一下番茄炒蛋的营养数据' },
+  { name: 'get_user_preferences', cn: '读饮食偏好', desc: '了解你的口味偏好', prompt: '请查看我的饮食偏好并告诉我分析结果' },
+  { name: 'get_diet_records', cn: '读饮食记录', desc: '查看你最近吃了什么', prompt: '请查看我最近的饮食记录' },
+  { name: 'get_expense_summary', cn: '查账单统计', desc: '看看饮食消费情况', prompt: '请查看我的饮食消费统计' },
+  { name: 'suggest_recipe', cn: '推荐食谱', desc: '综合推荐合适的菜谱', prompt: '请帮我推荐一道菜谱' },
+  { name: 'recommend_food', cn: '决策推荐', desc: '帮你决定吃什么', prompt: '请帮我决定今天吃什么' },
+  { name: 'add_diet_record', cn: '记录饮食', desc: '帮你记「我吃了什么」', prompt: '我想记录饮食，帮我记一下我吃了番茄炒蛋' },
+  { name: 'analyze_food_image', cn: '分析食物图', desc: '识别图片里的食物', prompt: '我上传了一张食物图片，请帮我分析' },
+  { name: 'get_nearby_food', cn: '附近美食', desc: '搜你所在城市的真实店铺', prompt: '请帮我推荐我所在城市附近的美食' },
+  { name: 'get_web_search', cn: '实时联网搜索', desc: '查最新资讯/菜谱', prompt: '请用联网搜索查一下最新的健康饮食资讯' },
+  { name: 'get_daily_nutrition_assessment', cn: '膳食营养评估', desc: '对照膳食指南评估摄入', prompt: '请评估我近期的营养摄入是否达标' },
 ]
 
 // 从 AI 回复中提取加粗菜名（**番茄炒蛋**），供「记录我吃了」
@@ -581,29 +581,42 @@ function scrollBottom() {
   color: var(--color-primary-dark);
 }
 .agent-tools-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 .agent-tool {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
   background: var(--color-bg-warm);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  font-size: 12px;
-  flex-wrap: wrap;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  font: inherit;
+  color: var(--color-text);
+}
+.agent-tool:hover {
+  background: rgba(217, 161, 91, 0.12);
+  border-color: var(--color-primary);
 }
 .agent-tool-name {
   font-family: monospace;
-  color: var(--color-primary-dark);
+  font-size: 12px;
+  color: var(--color-text-muted);
 }
 .agent-tool-cn {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--color-primary-dark);
 }
 .agent-tool-desc {
-  color: var(--color-text-muted);
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 /* 记录我吃了 */
 .eat-dishes {
