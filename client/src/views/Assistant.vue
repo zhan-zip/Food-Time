@@ -255,7 +255,27 @@ async function genRecommend() {
   recGenerating.value = false
 }
 
-onMounted(loadRecData)
+// ========== 定位城市（HTML5 GPS → 高德逆地理，与 TodayEat 一致） ==========
+async function locateCity() {
+  if (localStorage.getItem('nearby_city')) return
+  try {
+    if (!navigator.geolocation) return
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, maximumAge: 60000 })
+    })
+    const { longitude, latitude } = pos.coords
+    const resp = await fetch(`https://restapi.amap.com/v3/geocode/regeo?location=${longitude},${latitude}&key=38b348fb67f2d42cb1fa0fe61301bc45`)
+    const data = await resp.json()
+    const city = data.regeocode?.addressComponent?.city || data.regeocode?.addressComponent?.province || ''
+    const clean = String(city).replace(/市$|省$/, '')
+    if (clean) localStorage.setItem('nearby_city', clean)
+  } catch { /* 忽略 */ }
+}
+
+onMounted(() => {
+  loadRecData()
+  locateCity()
+})
 
 async function send() {
   const text = input.value.trim()

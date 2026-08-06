@@ -30,6 +30,37 @@ router = APIRouter(prefix="/api/chat", tags=["AI 对话"])
 # SSE 流式对话（主端点）
 # ============================================================
 
+@router.post("/search-web")
+async def search_web(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """联网搜索（博查 AI），供 TodayEat 附近美食等前端直接使用。返回 {results: [{title,url,snippet}]}"""
+    query = (body.get("query") or "").strip()
+    if not query:
+        return {"results": []}
+    from src.config import settings
+    if not settings.BOCHA_API_KEY:
+        return {"results": [], "error": "联网搜索服务未配置"}
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                "https://api.bochaai.com/v1/web-search",
+                headers={"Authorization": f"Bearer {settings.BOCHA_API_KEY}", "Content-Type": "application/json"},
+                json={"query": query, "summary": True, "count": 8},
+            )
+            data = resp.json()
+    except Exception as e:
+        return {"results": [], "error": str(e)}
+    pages = ((data or {}).get("data") or {}).get("webPages", {}).get("value", [])
+    results = [
+        {"title": p.get("name", ""), "url": p.get("url", ""), "snippet": (p.get("snippet") or p.get("summary") or "")[:150]}
+        for p in pages[:8]
+    ]
+    return {"results": results}
+
+
 @router.post("/send")
 @rate_limit("chat", 20, 60, use_user=True)  # H5：AI 对话 20 次/分钟/用户
 async def chat_send(

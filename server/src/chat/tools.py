@@ -545,35 +545,49 @@ async def execute_tool(
             return (f"[附近美食 · {location}]\n" + "\n".join(lines)
                     + "\n\n请基于以上真实 POI 数据，自然地向用户推荐 3 家左右，说明类型与特色。")
 
-        # ---- 工具 12：联网搜索（Tavily） ----
+        # ---- 工具 12：联网搜索（博查 AI，降级 DuckDuckGo） ----
         elif tool_name == "get_web_search":
             query = arguments.get("query", "")
             if not query:
                 return "[错误] 请提供搜索关键词"
             import httpx
             from src.config import settings
-            if not settings.TAVILY_API_KEY:
-                return "[提示] 联网搜索服务未配置（TAVILY_API_KEY），无法实时搜索。"
+            # ① 博查 AI（真实搜索）
+            if settings.BOCHA_API_KEY:
+                try:
+                    async with httpx.AsyncClient(timeout=20) as client:
+                        resp = await client.post(
+                            "https://api.bochaai.com/v1/web-search",
+                            headers={"Authorization": f"Bearer {settings.BOCHA_API_KEY}", "Content-Type": "application/json"},
+                            json={"query": query, "summary": True, "count": 5},
+                        )
+                        data = resp.json()
+                    pages = ((data or {}).get("data") or {}).get("webPages", {}).get("value", [])
+                    if pages:
+                        lines = []
+                        for i, p in enumerate(pages[:5]):
+                            title = p.get("name", "")
+                            url = p.get("url", "")
+                            snippet = (p.get("snippet") or p.get("summary") or "")[:100]
+                            lines.append(f"{i+1}. {title}\n   {url}\n   {snippet}")
+                        return (f"[联网搜索结果 · {query}]\n" + "\n".join(lines)
+                                + "\n\n请基于以上真实搜索结果回答用户，注明信息来源链接。")
+                except Exception:
+                    pass  # 博查失败 → 降级
+            # ② DuckDuckGo Instant Answer（无需 key 兜底）
             try:
-                async with httpx.AsyncClient(timeout=20) as client:
-                    resp = await client.post(
-                        "https://api.tavily.com/search",
-                        json={"api_key": settings.TAVILY_API_KEY, "query": query, "max_results": 5, "search_depth": "basic"},
+                async with httpx.AsyncClient(timeout=15) as client:
+                    resp = await client.get(
+                        "https://api.duckduckgo.com/",
+                        params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1},
                     )
                     data = resp.json()
-            except Exception as e:
-                return f"[错误] 联网搜索失败: {e}"
-            results = (data or {}).get("results", [])
-            if not results:
-                return f"[搜索结果] 未找到关于「{query}」的实时信息。"
-            lines = []
-            for i, r in enumerate(results[:5]):
-                title = r.get("title", "")
-                url = r.get("url", "")
-                content = (r.get("content", "") or "")[:100]
-                lines.append(f"{i+1}. {title}\n   {url}\n   {content}")
-            return (f"[联网搜索结果 · {query}]\n" + "\n".join(lines)
-                    + "\n\n请基于以上真实搜索结果回答用户，注明信息来源链接。")
+                abstract = (data or {}).get("AbstractText", "")
+                if abstract:
+                    return f"[联网搜索(降级) · {query}]\n{abstract}\n\n请基于以上信息回答用户。"
+            except Exception:
+                pass
+            return f"[搜索结果] 未找到关于「{query}」的实时信息。"
 
         # ---- 工具 11：膳食营养评估（对照膳食指南推荐量） ----
         elif tool_name == "get_daily_nutrition_assessment":

@@ -204,8 +204,11 @@
           <button class="btn btn-outline btn-sm" style="width:100%" :disabled="nearbyLoading" @click="getNearbyRecommend">
             {{ nearbyLoading ? '查询中...' : '查看当地特色菜推荐' }}
           </button>
-          <div v-if="nearbyResult" class="nearby-result-card" style="margin-top:10px">
-            <div class="nearby-result-text">{{ nearbyResult }}</div>
+          <div v-if="nearbyResult && nearbyResult.length" class="nearby-result-card" style="margin-top:10px">
+            <a v-for="(r, i) in nearbyResult" :key="i" :href="r.url || '#'" target="_blank" rel="noopener" class="nearby-result-item">
+              <strong class="nearby-result-title">{{ r.title }}</strong>
+              <p class="nearby-result-snippet">{{ r.snippet }}</p>
+            </a>
           </div>
         </div>
 
@@ -468,7 +471,7 @@ watch(nearbyCity, (v) => {
   if (v) localStorage.setItem('nearby_city', v)
 })
 const nearbyLoading = ref(false)
-const nearbyResult = ref('')
+const nearbyResult = ref([])
 const manualCityMode = ref(false)
 const nearbyCityInput = ref('')
 
@@ -611,68 +614,35 @@ function setManualCity() {
 
 async function getNearbyRecommend() {
   nearbyLoading.value = true
-  nearbyResult.value = ''
+  nearbyResult.value = []
 
   const token = localStorage.getItem('token')
   if (!token) {
-    nearbyResult.value = '请先登录。'
+    nearbyResult.value = [{ title: '请先登录', url: '', snippet: '' }]
     nearbyLoading.value = false
     return
   }
 
-  const city = nearbyCity.value || '当前城市'
-  const prompt = `我在${city}，请推荐3道当地特色菜，每道菜一行，格式：菜名 — 一句话理由。总共不超过100字。`
+  const city = nearbyCity.value || ''
+  if (!city) {
+    nearbyResult.value = [{ title: '未能定位城市，请先手动设置城市', url: '', snippet: '' }]
+    nearbyLoading.value = false
+    return
+  }
 
   try {
-    const resp = await fetch('/api/chat/send', {
+    const resp = await fetch('/api/chat/search-web', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ content: prompt, session_id: 'today-nearby' }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ query: `${city} 特色美食推荐` }),
     })
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ detail: '请求失败' }))
-      nearbyResult.value = err.detail || '查询失败'
-      nearbyLoading.value = false
-      return
+    const data = await resp.json()
+    nearbyResult.value = data.results || []
+    if (!nearbyResult.value.length) {
+      nearbyResult.value = [{ title: `未找到 ${city} 的相关美食信息`, url: '', snippet: '试试换个城市或关键词' }]
     }
-
-    // SSE 流式读取（event: / data: 两行配对）
-    const reader = resp.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let currentEvent = ''
-    let fullText = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          currentEvent = line.slice(7).trim()
-        } else if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6))
-            if (currentEvent === 'token') {
-              fullText += data.content
-              nearbyResult.value = fullText
-            }
-          } catch { /* skip */ }
-          currentEvent = ''
-        }
-      }
-    }
-
-    if (!nearbyResult.value) nearbyResult.value = fullText || '暂无结果，请稍后再试。'
   } catch {
-    nearbyResult.value = '网络错误，请检查后端是否启动。'
+    nearbyResult.value = [{ title: '网络错误，请检查后端是否启动', url: '', snippet: '' }]
   } finally {
     nearbyLoading.value = false
   }
@@ -904,6 +874,29 @@ async function submitRecord() {
   background: var(--color-bg-warm);
   border-left: 3px solid var(--color-primary);
   border-radius: 6px;
+}
+/* 附近美食搜索结果 */
+.nearby-result-item {
+  display: block;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  background: var(--color-bg-warm);
+  text-decoration: none;
+  color: var(--color-text);
+}
+.nearby-result-item:hover {
+  background: rgba(217, 161, 91, 0.12);
+}
+.nearby-result-title {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary-dark);
+}
+.nearby-result-snippet {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  line-height: 1.5;
 }
 .custom-filter-bar {
   display: flex;
