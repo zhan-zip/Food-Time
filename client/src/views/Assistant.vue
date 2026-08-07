@@ -582,7 +582,7 @@ function scrollBottom() {
 }
 .agent-tools-list {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .agent-tool {
@@ -608,6 +608,8 @@ function scrollBottom() {
   font-family: monospace;
   font-size: 12px;
   color: var(--color-text-muted);
+  word-break: break-all;
+  max-width: 100%;
 }
 .agent-tool-cn {
   font-weight: 700;
