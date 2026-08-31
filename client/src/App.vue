@@ -36,7 +36,7 @@
           <div class="navbar-actions">
             <!-- 登录/用户状态 -->
             <template v-if="isLoggedIn">
-              <router-link to="/about" class="navbar-link" active-class="navbar-link--active">
+              <router-link to="/about" class="navbar-link" active-class="navbar-link--active" data-nav="/about">
                 <span class="navbar-link-icon">&#x1F464;</span>
                 <span class="navbar-link-label">{{ userNickname }}</span>
               </router-link>
@@ -71,7 +71,7 @@
           </router-link>
           <div class="sidebar-divider"></div>
           <template v-if="isLoggedIn">
-            <router-link to="/about" class="sidebar-link" active-class="sidebar-link--active" @click="closeSidebar">
+            <router-link to="/about" class="sidebar-link" active-class="sidebar-link--active" data-nav="/about" @click="closeSidebar">
               <span class="sidebar-link-icon">&#x1F464;</span>
               <span>{{ userNickname }}</span>
             </router-link>

@@ -25,7 +25,7 @@
           <p class="text-secondary">可以帮你：搜索食物、推荐食谱、分析营养、查看账单</p>
         </div>
 
-        <!-- 快捷决策面板（始终可见） -->
+        <!-- 快捷决策面板（无消息时始终可见，有消息后可按输入区按钮收起/展开） -->
         <div class="quick-decision-panel" v-if="messages.length === 0 || showQuickPanel">
           <div class="quick-decision-title">快速决策</div>
           <div class="quick-prompts">
@@ -386,6 +386,7 @@ async function send() {
 }
 
 function processSSEEvent(eventType, data, assistantIdx, toolStatus) {
+  // 按事件类型分发：tool_start/tool_end 更新工具调用指示器，token 逐字追加正文，done 结束，error 报错
   switch (eventType) {
     case 'tool_start':
       messages.value[assistantIdx].tooling = true

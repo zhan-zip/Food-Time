@@ -14,7 +14,7 @@
       </div>
     </section>
 
-    <!-- 每日推送 -->
+    <!-- 每日推荐 -->
     <section class="page-section">
       <div class="container">
         <h2 class="section-title">每日推荐</h2>

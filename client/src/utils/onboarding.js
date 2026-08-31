@@ -51,7 +51,7 @@ const STEPS = [
   {
     element: '[data-nav="/assistant"]',
     popover: {
-      title: '🤖 AI 助手',
+      title: '🤖 Agent 助手',
       description: '随时和 AI 聊天，帮你选菜、分析营养、管理健康。',
       side: 'bottom',
     },
