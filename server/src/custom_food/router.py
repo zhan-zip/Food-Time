@@ -1,4 +1,4 @@
-"""自定义食物模块 - API 路由（P2：DIY 烹饪建议 + 保存 + 我的菜谱）"""
+"""自定义食物模块 - API 路由（P2：DIY 烹饪建议 + 食材识别 + 保存 + 我的菜谱 + 广场发布）"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field

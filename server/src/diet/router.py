@@ -340,6 +340,7 @@ async def nutrition_assessment(
         "carbs": carbs_ref_val,
     }
 
+    # 对照评估：实际/推荐 在 ±10% 内视为「正常」，否则按偏差方向判「偏高/偏低」
     def _status(actual_v: float, ref_v: float) -> str:
         if ref_v <= 0:
             return "无参考"

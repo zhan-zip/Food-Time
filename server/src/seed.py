@@ -1,4 +1,4 @@
-"""种子数据 - 初始化食物分类和基础食物"""
+"""种子数据 - 初始化食物分类、基础食物与示例食谱（幂等）"""
 
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -158,6 +158,7 @@ async def seed_all(db: AsyncSession):
 
 
 async def seed_categories(db: AsyncSession):
+    """幂等插入食物分类（表已有数据则跳过，重复执行不重复插入）"""
     result = await db.execute(select(FoodCategory).limit(1))
     if result.scalar_one_or_none():
         print("[SEED] 食物分类已存在，跳过")
@@ -170,6 +171,7 @@ async def seed_categories(db: AsyncSession):
 
 
 async def seed_foods(db: AsyncSession):
+    """幂等插入基础食物（表已有数据则跳过）"""
     result = await db.execute(select(Food).limit(1))
     if result.scalar_one_or_none():
         print("[SEED] 食物数据已存在，跳过")
@@ -275,6 +277,7 @@ SAMPLE_RECIPES = [
 
 
 async def seed_recipes(db: AsyncSession):
+    """幂等插入示例食谱及食材/调料明细（表已有数据则跳过）"""
     result = await db.execute(select(CustomRecipe).limit(1))
     if result.scalar_one_or_none():
         print("[SEED] 食谱数据已存在，跳过")

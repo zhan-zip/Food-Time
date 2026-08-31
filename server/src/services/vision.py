@@ -1,4 +1,9 @@
-﻿"""外部服务 - Qwen VL 视觉模型客户端（骨架）"""
+﻿"""外部服务 - Qwen VL 视觉模型客户端（简版骨架，遗留）
+
+正式的多模态识别客户端在 services/qwen.py（qwen_vl，含 OCR 记账、
+食材识别、防 SSRF 的 is_safe_image_url 等）；本模块仅为早期极简壳，
+实际功能请使用 qwen_vl。
+"""
 
 from src.config import settings
 

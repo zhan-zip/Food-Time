@@ -1,4 +1,4 @@
-"""食物库模块 - API 路由（P0：基础搜索+详情 / P2：DIY食材接口）"""
+"""食物库模块 - API 路由（P0：基础搜索+详情 / P2：DIY 食材接口 / 菜品图片代理）"""
 
 import httpx
 
@@ -250,6 +250,7 @@ def _image_query(name: str) -> str:
     return FOOD_IMAGE_MAP.get(name, name)
 
 
+# 内存缓存：菜名 → 图片 URL（空串表示已查询过但无结果，避免重复请求 Pixabay）
 _image_cache: dict[str, str] = {}
 
 
