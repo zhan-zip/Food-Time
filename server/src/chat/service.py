@@ -4,7 +4,7 @@
 1. 构建 5 层 System Prompt
 2. 短期记忆管理（最近 20 条上下文）
 3. 长期记忆提取（每 6 轮用户消息）
-4. RAG 增强（自动 + 手动语义搜索）
+4. RAG 增强（食物库自动语义搜索）
 5. 多轮 Tool-Calling 循环（最多 3 轮）
 6. SSE 流式输出 + 工具进度事件
 
@@ -342,6 +342,7 @@ class ChatService:
             "analyze_food_image": "正在分析食物图片...",
             "get_nearby_food": f"正在搜索 {args.get('location', '')} 附近的美食...",
             "get_daily_nutrition_assessment": "正在评估您的营养摄入（对照膳食指南）...",
+            "get_web_search": f"正在联网搜索：{args.get('query', '')}...",
         }
         return messages.get(tool_name, f"正在调用 {tool_name}...")
 

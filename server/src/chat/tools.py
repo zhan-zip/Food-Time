@@ -1,6 +1,6 @@
 """工具定义与执行 — 对应 qq-agent 的 llm/tools.py
 
-10 个工具，按 OpenAI function calling 格式定义。
+12 个工具，按 OpenAI function calling 格式定义。
 扩展新工具只需三步：
   1. 在 TOOLS 列表追加定义
   2. 在 execute_tool() 添加分支
@@ -215,8 +215,8 @@ TOOLS_README = """【可用工具清单】
 8. add_diet_record(food_name, meal_type, quantity_g) — 记录用户饮食
 9. analyze_food_image(image_url) — 分析食物图片
 10. get_nearby_food(location, cuisine?) — 附近食物推荐（选做）
-11. get_daily_nutrition_assessment(days?) — 评估近N天饮食摄入，对照《中国居民膳食指南(2022)》推荐量（达标/偏高/偏低）
-12. get_web_search(query) — 实时联网搜索（最新资讯/菜谱/店铺/营养知识），当需要最新信息时调用
+11. get_web_search(query) — 实时联网搜索（最新资讯/菜谱/店铺/营养知识），当需要最新信息时调用
+12. get_daily_nutrition_assessment(days?) — 评估近N天饮食摄入，对照《中国居民膳食指南(2022)》推荐量（达标/偏高/偏低）
 
 【工具调用规则】
 - 涉及食物营养数据 → 必须调用 search_foods 或 get_food_nutrition
@@ -545,7 +545,7 @@ async def execute_tool(
             return (f"[附近美食 · {location}]\n" + "\n".join(lines)
                     + "\n\n请基于以上真实 POI 数据，自然地向用户推荐 3 家左右，说明类型与特色。")
 
-        # ---- 工具 12：联网搜索（博查 AI，降级 DuckDuckGo） ----
+        # ---- 工具 11：联网搜索（博查 AI，降级 DuckDuckGo） ----
         elif tool_name == "get_web_search":
             query = arguments.get("query", "")
             if not query:
@@ -589,7 +589,7 @@ async def execute_tool(
                 pass
             return f"[搜索结果] 未找到关于「{query}」的实时信息。"
 
-        # ---- 工具 11：膳食营养评估（对照膳食指南推荐量） ----
+        # ---- 工具 12：膳食营养评估（对照膳食指南推荐量） ----
         elif tool_name == "get_daily_nutrition_assessment":
             days = arguments.get("days", 7)
             try:

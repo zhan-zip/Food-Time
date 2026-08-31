@@ -1,9 +1,11 @@
 ﻿"""AI 对话模块 — API 路由（SSE 流式）
 
 路由：
-  POST /api/chat/send     — 发送消息，SSE 流式返回
-  GET  /api/chat/history  — 获取对话历史
-  DELETE /api/chat/history — 清除对话历史
+  POST   /api/chat/send            — 发送消息，SSE 流式返回
+  POST   /api/chat/search-web      — 联网搜索（博查 AI），供前端直接使用
+  GET    /api/chat/history         — 获取对话历史
+  DELETE /api/chat/history         — 清除对话历史
+  POST   /api/chat/build-rag-index — 重建食物 RAG 索引（管理端）
 """
 
 import json
