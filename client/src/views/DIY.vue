@@ -155,10 +155,6 @@ onMounted(async () => {
 
 // ---------- 飞行动画 ----------
 /**
- * 创建飞行克隆卡片：从 sourceEl 位置沿弧线飞到备菜盘
- * 动画阶段：拾取放大 → 弧线飞行 → 弹跳到达 → 淡出消失
- */
-/**
  * 飞行动画目标：
  * - 桌面布局：备菜盘（PlateSection 可见，width > 0）
  * - 移动端（备菜盘被 Tab 隐藏、尺寸为 0）→ 飞到「备菜盘」Tab 按钮
@@ -174,6 +170,10 @@ function getFlyTarget() {
   return tabBtn || plateEl || null
 }
 
+/**
+ * 创建飞行克隆卡片：从 sourceEl 位置沿弧线飞到备菜盘
+ * 动画阶段：拾取放大 → 弧线飞行 → 弹跳到达 → 淡出消失
+ */
 function createFlyingCard(item, sourceEl) {
   if (!sourceEl) {
     console.debug('[Fly] sourceEl 为空，跳过飞行动画')

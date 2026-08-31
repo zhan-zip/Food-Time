@@ -8,7 +8,7 @@
 
     <!-- 打开状态：双门 -->
     <div v-else class="fridge-open">
-      <!-- 左门阴影/背板 -->
+      <!-- 左门扇 -->
       <div class="fridge-door fridge-door-left">
         <div class="door-inner-wrapper">
           <div
@@ -32,7 +32,7 @@
         </div>
       </div>
 
-      <!-- 右门阴影/背板 -->
+      <!-- 右门扇 -->
       <div class="fridge-door fridge-door-right">
         <div class="door-inner-wrapper">
           <div

@@ -231,6 +231,7 @@ const genderLabel = computed(() => {
   return ''
 })
 
+// 打开编辑档案弹窗，回填当前用户档案字段
 function openEdit() {
   editForm.nickname = user.value?.nickname ?? ''
   editForm.avatar_url = user.value?.avatar_url ?? ''
@@ -438,6 +439,7 @@ function drawRadar() {
     ctx.fillStyle = '#3A2418'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'
     ctx.fillText(labels[i], cx + Math.cos(ang) * (R + 18), cy + Math.sin(ang) * (R + 18) + 4)
   })
+  // 绘制多边形（推荐量用虚线 + 半透明填充，实际摄入用实线）
   const drawPolygon = (values, color, dashed) => {
     ctx.beginPath()
     keys.forEach((k, i) => {
@@ -471,6 +473,7 @@ async function interpret() {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({ content: '请解读我的营养分析数据（对照膳食指南推荐量）。要求：先用一句话总结整体状况，再列出3-5条具体可执行的调整建议（每条带依据），简洁结构化、一目了然，总字数200字以内。', session_id: 'about-nutrition' }),
     })
+    // 读取 SSE 流：逐行解析 event/data，token 事件逐字追加到解读结果
     const reader = resp.body.getReader()
     const decoder = new TextDecoder()
     let buf = '', currentEvent = ''

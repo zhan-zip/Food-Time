@@ -26,7 +26,8 @@ request.interceptors.response.use(
       localStorage.removeItem('user')  // 修复 M10：同时清除用户缓存，避免路由守卫读到旧 user
       window.location.href = '/login'
     }
-    // 提取可读错误信息（detail 可能是字符串、数组或对象）
+    // 错误归一化：detail 可能是字符串、数组或对象，统一提取为可读中文，
+    // 并以 Error(msg) 形式 reject，供调用方 catch 直接展示
     let msg = '请求失败'
     const detail = error.response?.data?.detail
     if (detail) {

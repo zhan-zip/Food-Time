@@ -39,8 +39,8 @@ const emit = defineEmits(['done'])
 
 const canvasRef = ref(null)
 const CSS_SIZE = 280 // CSS 显示尺寸
-const DPR = Math.min(window.devicePixelRatio || 1, 2) // 限制最大 2x 避免性能问题
-const CANVAS_SIZE = CSS_SIZE * DPR // 物理像素尺寸
+const DPR = Math.min(window.devicePixelRatio || 1, 2) // 设备像素比，限制最大 2x 避免性能问题
+const CANVAS_SIZE = CSS_SIZE * DPR // 物理像素尺寸（高 DPI 屏下保证转盘文字清晰不模糊）
 
 const spinning = ref(false)
 const result = ref(null)

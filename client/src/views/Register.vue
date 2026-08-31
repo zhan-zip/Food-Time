@@ -178,7 +178,7 @@ function validate() {
     return false
   }
 
-  // 验证码（可选，但后端校验时会检查）
+  // 验证码（前端必填校验，后端同样会校验）
   if (!form.code.trim()) {
     errors.code = '请输入验证码'
     return false

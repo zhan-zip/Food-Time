@@ -14,6 +14,8 @@ const props = defineProps({
 })
 const url = ref('')
 
+// 三级图片回退链路：本地 AI 图(/static/food_img) → Pixabay 代理图（usePixabay=true 时）→ 🍽️ emoji
+
 // 与后端 generate_images.py safe_name 保持一致的文件名清洗
 function safeName(name) {
   return String(name).replace(/[\\/:*?"<>|\s]+/g, '_')

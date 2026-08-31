@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 import { getDIYIngredients, suggestRecipe, saveRecipe, getMyRecipes, publishRecipe } from '@/api/diy'
 
 export const useDIYStore = defineStore('diy', () => {
+  // DIY「我的厨房」页面状态机：选食材(plate) → AI 建议 → 烹饪动画 → 保存 → 完成，
+  // 阶段流转见下方 stage 的 selecting → suggesting → cooking → saving → done
   // ---- 食材数据 ----
   const fridgeLeft = ref([])    // 冰箱左门 [{key, label, color, items}]
   const fridgeRight = ref([])   // 冰箱右门

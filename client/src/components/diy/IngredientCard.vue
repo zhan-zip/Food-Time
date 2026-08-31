@@ -52,7 +52,7 @@ defineEmits(['click'])
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-color, #D9A15B) 30%, transparent);
 }
 .card-emoji {
-  font-size: 44px;  /* 烹饪动画收尾：emoji 放大到 2 倍突出 */
+  font-size: 44px;  /* 食材 emoji 放大，作为卡片视觉主体 */
   line-height: 1;
 }
 .card-name {

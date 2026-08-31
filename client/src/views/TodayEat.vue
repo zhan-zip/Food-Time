@@ -466,7 +466,7 @@ function goDetail(food) {
 }
 
 const nearbyCity = ref('')
-// 定位城市存 localStorage，供 AI 助手「附近美食」工具使用
+// 定位城市存 localStorage，供 Agent 助手「附近美食」工具使用
 watch(nearbyCity, (v) => {
   if (v) localStorage.setItem('nearby_city', v)
 })
@@ -681,6 +681,7 @@ async function search() {
     const res = await axios.get('/api/foods', { params })
     let items = res.data.items || []
 
+    // 前端二次筛选：辣度 / 热量上限 / 烹饪方式（tags 字段解析，接口不支持则本地过滤）
     if (filterForm.value.spicy) {
       items = items.filter(f => {
         try {

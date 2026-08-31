@@ -92,7 +92,7 @@ const description = ref('')
 const cookingMethod = ref(props.currentMethod)
 const saving = ref(false)
 
-// 重置
+// 打开弹窗时：重置步骤、表单字段与保存状态
 watch(() => props.visible, (v) => {
   if (v) {
     step.value = 0
