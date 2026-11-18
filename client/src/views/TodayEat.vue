@@ -320,7 +320,9 @@ import { getFavoriteRecipes } from '@/api/public'
 import { suggestRecipe, recognizeIngredients } from '@/api/diy'
 import SpinWheel from '@/components/today/SpinWheel.vue'
 import FoodImage from '@/components/FoodImage.vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
+
+const route = useRoute()
 
 // ====== Tab ======
 const tab = ref('search')
@@ -661,6 +663,10 @@ function searchWheelResult() {
 
 // ====== 搜索 & 分类 ======
 onMounted(async () => {
+  // 首页搜索框跳转带入的关键词（?keyword=xxx）
+  if (route.query.keyword) {
+    keyword.value = String(route.query.keyword)
+  }
   try {
     const res = await axios.get('/api/foods/categories')
     categories.value = res.data
